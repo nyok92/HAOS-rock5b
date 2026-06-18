@@ -10,7 +10,7 @@ function haos_pre_image() {
     if ls "${BINARIES_DIR}"/*.dtbo 1> /dev/null 2>&1; then
         echo "Found .dtbo files in ${BINARIES_DIR}"
         mkdir -p "${BOOT_DATA}/overlays"
-        cp "${BINARIES_DIR}/*.dtbo "${BOOT_DATA}/overlays/"
+        cp "${BINARIES_DIR}"/*.dtbo "${BOOT_DATA}/overlays/"
     fi
 
     cp "${BOARD_DIR}/boot-env.txt" "${BOOT_DATA}/haos-config.txt"
