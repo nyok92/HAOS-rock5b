@@ -1,4 +1,4 @@
-part start ${devtype} ${devnum} 6 mmc_env
+part start ${devtype} ${devnum} hassos-bootstate mmc_env
 ${devtype} dev ${devnum}
 
 setenv loadbootstate " \
@@ -25,6 +25,8 @@ setenv bootargs_haos "zram.enabled=1 zram.num_devices=3 systemd.machine_id=${MAC
 # HAOS system A/B
 setenv bootargs_a "root=PARTUUID=8d3d53e3-6d49-4c38-8349-aff6859e82fd ro rootwait"
 setenv bootargs_b "root=PARTUUID=a3ec664e-32ce-4665-95ea-7ae90ce9aa20 ro rootwait"
+
+part number ${devtype} ${devnum} hassos-boot boot_partnum
 
 # Load environment from haos-config.txt
 if test -e ${devtype} ${devnum}:1 haos-config.txt; then
