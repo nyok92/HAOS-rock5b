@@ -36,7 +36,7 @@ if test -e ${devtype} ${devnum}:${boot_partnum} haos-config.txt; then
 fi
 
 # Load extraargs
-fileenv ${devtype} ${devnum}:1 ${ramdisk_addr_r} cmdline.txt cmdline
+fileenv ${devtype} ${devnum}:${boot_partnum} ${ramdisk_addr_r} cmdline.txt cmdline
 
 # Load device tree
 # fdtfile variable is read from haos-config.txt
