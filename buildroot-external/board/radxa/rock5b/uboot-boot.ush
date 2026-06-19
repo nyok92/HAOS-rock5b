@@ -29,9 +29,9 @@ setenv bootargs_b "root=PARTUUID=a3ec664e-32ce-4665-95ea-7ae90ce9aa20 ro rootwai
 part number ${devtype} ${devnum} hassos-boot boot_partnum
 
 # Load environment from haos-config.txt
-if test -e ${devtype} ${devnum}:1 haos-config.txt; then
+if test -e ${devtype} ${devnum}:${boot_partnum} haos-config.txt; then
   echo 'loading environment from haos-config.txt'
-  fatload ${devtype} ${devnum}:1 ${ramdisk_addr_r} haos-config.txt
+  fatload ${devtype} ${devnum}:${boot_partnum} ${ramdisk_addr_r} haos-config.txt
   env import -t ${ramdisk_addr_r} ${filesize}
 fi
 
