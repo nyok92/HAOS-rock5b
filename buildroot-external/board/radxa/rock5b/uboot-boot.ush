@@ -1,5 +1,6 @@
 part start ${devtype} ${devnum} 6 mmc_env
 ${devtype} dev ${devnum}
+
 setenv loadbootstate " \
     echo 'loading env...'; \
     ${devtype} read ${ramdisk_addr_r} ${mmc_env} 0x40; \
