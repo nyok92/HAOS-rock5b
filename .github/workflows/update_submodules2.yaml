@@ -1,22 +1,26 @@
 name: Update Submodules 2
-on:
-  workflow_dispatch: # Allows this workflow to be triggered manually or by another workflow
-
-jobs:
-  update-submodule:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout the repo
-      uses: actions/checkout@v2
-      with:
-        submodules: 'recursive' # Ensures submodules are checked out
-
-    - name: Update buildroot submodule
-      run: |
-        cd buildroot
-        git fetch
-        git checkout 2025.02.x-haos
-        git pull origin 2025.02.x-haos
-        cd ..
-        git commit -am "Update buildroot submodule to latest"
-        git push
+ 
+# Trigger: Run weekly, or manually via GitHub UI  
+on:  
+  schedule:  
+    - cron: "0 0 * * 0"  # Weekly on Sunday at midnight UTC  
+  workflow_dispatch:  # Allow manual runs  
+ 
+jobs:  
+  update-submodules:  
+    runs-on: ubuntu-latest  
+    steps:  
+      - name: Checkout parent repo  
+        uses: actions/checkout@v7 
+ 
+      - name: Update submodules  
+        run: |  
+          git submodule update --remote --merge  
+          git add .gitmodules buildroot  # Replace with your submodule path  
+ 
+      - name: Commit and push changes  
+        run: |  
+          git config --global user.name "GitHub Actions Bot"  
+          git config --global user.email "actions@github.com"  
+          git commit -m "Update submodules to latest versions" || echo "No changes to commit"  
+          git push  
