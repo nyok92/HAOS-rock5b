@@ -2,6 +2,16 @@ config BR2_PACKAGE_ROCKCHIP_BLOBS
 	bool "Rockchip loader binaries"
 	help
 	  Rockchip loader binaries (required by U-Boot)
+	  
+config BR2_PACKAGE_ROCKCHIP_BLOBS_ATF_INSTALL
+	bool "Rockchip loader binaries"
+	help
+	  install ATF
+
+config BR2_PACKAGE_ROCKCHIP_BLOBS_TPL_INSTALL
+	bool "Rockchip loader binaries"
+	help
+	  install TPL
 
 if BR2_PACKAGE_ROCKCHIP_BLOBS
 
