@@ -15,12 +15,17 @@ jobs:
  
       - name: Update submodules  
         run: |  
-          git submodule update --remote --merge  
-          git add .gitmodules buildroot  # Replace with your submodule path  
- 
+          # Sync submodule remote URLs (in case .gitmodules changed)  
+          git submodule sync --recursive  
+          # Update submodules to latest remote commits and merge  
+          git submodule update --remote --merge --recursive  
+          # Stage changes to submodule references  
+          git add .gitmodules */.gitmodules  # Add all .gitmodules files  
+          git add buildroot  # Replace with your submodule path (e.g., `libs/utils`)  
+
       - name: Commit and push changes  
         run: |  
           git config --global user.name "GitHub Actions Bot"  
           git config --global user.email "actions@github.com"  
           git commit -m "Update submodules to latest versions" || echo "No changes to commit"  
-          git push  
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}  
