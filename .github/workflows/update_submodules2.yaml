@@ -1,4 +1,4 @@
-name: Update Submodule
+name: Update Submodules 2
 on:
   workflow_dispatch: # Allows this workflow to be triggered manually or by another workflow
 
