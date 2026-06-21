@@ -1,0 +1,22 @@
+name: Update Submodule
+on:
+  workflow_dispatch: # Allows this workflow to be triggered manually or by another workflow
+
+jobs:
+  update-submodule:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout the repo
+      uses: actions/checkout@v2
+      with:
+        submodules: 'recursive' # Ensures submodules are checked out
+
+    - name: Update SharedKernel submodule
+      run: |
+        cd buildroot
+        git fetch
+        git checkout 2025.02.x-haos
+        git pull origin 2025.02.x-haos
+        cd ..
+        git commit -am "Update buildroot submodule to latest"
+        git push
