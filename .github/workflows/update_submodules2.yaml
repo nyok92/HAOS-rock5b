@@ -20,8 +20,8 @@ jobs:
           # Update submodules to latest remote commits and merge  
           git submodule update --remote --merge --recursive  
           # Stage changes to submodule references  
-          git add .gitmodules */.gitmodules  # Add all .gitmodules files  
-          git add buildroot  # Replace with your submodule path (e.g., `libs/utils`)  
+          git add .gitmodules
+          git add buildroot
 
       - name: Commit and push changes  
         run: |  
