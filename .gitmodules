@@ -1,4 +1,6 @@
 [submodule "buildroot"]
 	path = buildroot
-	url = https://github.com/home-assistant/buildroot.git
-	branch = 2025.02.x-haos
+	#url = https://github.com/home-assistant/buildroot.git
+	#branch = 2025.02.x-haos
+    url = https://github.com/nyok92/buildroot.git
+    branch = 2025.02.x-haos-rock5b
