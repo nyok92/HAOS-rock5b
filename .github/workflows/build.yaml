@@ -29,7 +29,6 @@ on:
         options:
           - default
           - stable
-          - beta
           - dev
 
 env:
