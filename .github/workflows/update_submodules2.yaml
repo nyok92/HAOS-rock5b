@@ -11,7 +11,7 @@ jobs:
       with:
         submodules: 'recursive' # Ensures submodules are checked out
 
-    - name: Update SharedKernel submodule
+    - name: Update buildroot submodule
       run: |
         cd buildroot
         git fetch
