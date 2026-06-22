@@ -14,7 +14,7 @@ SUPERVISOR_ARCH=aarch64
 HASSOS_ID="hassos"
 HASSOS_NAME="Home Assistant OS"
 DEPLOYMENT="production"
-DISK_SIZE=3G
+DISK_SIZE=2G
 
 # ----------------------------
 # ROCKCHIP (recommended, vendor dtb)
