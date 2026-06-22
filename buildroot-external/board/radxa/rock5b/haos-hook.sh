@@ -1,19 +1,20 @@
 #!/bin/bash
-set -x
+# shellcheck disable=SC2155
 
 function haos_pre_image() {
     local BOOT_DATA="$(path_boot_dir)"
 
-    cp -t "${BOOT_DATA}" \
-        "${BINARIES_DIR}/boot.scr" \
-        "${BINARIES_DIR}/rockchip/"*.dtb
+    cp "${BINARIES_DIR}/boot.scr" "${BOOT_DATA}/boot.scr"
+    cp "${BINARIES_DIR}"/*.dtb "${BOOT_DATA}/"
 
-    mkdir -p "${BOOT_DATA}/overlays"
-    cp "${BINARIES_DIR}/overlays/"*.dtbo "${BOOT_DATA}/overlays/"
+    if ls "${BINARIES_DIR}"/*.dtbo 1> /dev/null 2>&1; then
+        echo "Found .dtbo files in ${BINARIES_DIR}"
+        mkdir -p "${BOOT_DATA}/overlays"
+        cp "${BINARIES_DIR}"/*.dtbo "${BOOT_DATA}/overlays/"
+    fi
 
-    cp "${BOARD_DIR}/../boot-env-common.txt" "${BOOT_DATA}/haos-config.txt"
-    cat "${BOARD_DIR}/boot-env.txt" >> "${BOOT_DATA}/haos-config.txt"
-    cp "${BOARD_DIR}/../cmdline.txt" "${BOOT_DATA}/cmdline.txt"
+    cp "${BOARD_DIR}/boot-env.txt" "${BOOT_DATA}/haos-config.txt"
+    cp "${BOARD_DIR}/cmdline.txt" "${BOOT_DATA}/cmdline.txt"
 }
 
 
