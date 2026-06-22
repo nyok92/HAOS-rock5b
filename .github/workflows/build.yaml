@@ -9,7 +9,7 @@ on:
         description: 'List of boards to build (comma separated identifiers)'
         required: false
         type: string
-        default: 'rockpi-4a,rockpi-4a-plus,rockpi-4b,rockpi-4b-plus,rockpi-4c,rock-4c-plus,rock-4se'
+        default: 'rock-5b'
       hassio_channel:
         description: 'Release channel to use (default: stable for GH releases, dev otherwise)'
         type: choice
