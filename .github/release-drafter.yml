@@ -4,6 +4,8 @@ version-template: "$MAJOR.$MINOR"
 categories:
   - title: 'Home Assistant Operating System'
     label: 'os'
+  - title: 'Rock 5B'
+    label: 'board/rock5b'
   - title: 'Raspberry Pi'
     label: 'board/raspberrypi'
   - title: 'Home Assistant Yellow'
