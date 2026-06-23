@@ -16,4 +16,3 @@ define ROCKCHIP_BLOBS_INSTALL_IMAGES_CMDS
 endef
 
 $(eval $(generic-package))
-
