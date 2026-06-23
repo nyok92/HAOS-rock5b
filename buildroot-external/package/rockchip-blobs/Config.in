@@ -17,4 +17,5 @@ config BR2_PACKAGE_ROCKCHIP_BLOBS_TPL
 	string "Rockchip TPL file"
 	help
 	  Rockchip TPL file
+
 endif
