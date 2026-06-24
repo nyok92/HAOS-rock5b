@@ -1,4 +1,4 @@
-###### Rock5b #######
+############## RADXA ROCK5B Buildroot config ###############
 BR2_aarch64=y
 BR2_cortex_a76_a55=y
 BR2_TOOLCHAIN_BUILDROOT_CXX=y
@@ -26,14 +26,14 @@ BR2_TARGET_ROOTFS_EROFS_ZTAILPACKING=y
 BR2_TARGET_ROOTFS_EROFS_PCLUSTERSIZE=262144
 # BR2_TARGET_ROOTFS_TAR is not set
 
-############## BOOT #########################
+############## 1/BOOT ###############
 
-# Grub
+# a) Grub
 BR2_TARGET_GRUB2=y
 BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI="boot linux ext2 fat squash4 part_msdos part_gpt normal efi_gop regexp loadenv echo cat test configfile smbios"
 BR2_TARGET_GRUB2_INSTALL_TOOLS=y
 
-# Uboot
+# b) Uboot
 #BR2_TARGET_UBOOT=y
 #BR2_TARGET_UBOOT_BUILD_SYSTEM_KCONFIG=y
 #BR2_TARGET_UBOOT_CUSTOM_GIT=y
@@ -48,10 +48,10 @@ BR2_TARGET_GRUB2_INSTALL_TOOLS=y
 #BR2_TARGET_UBOOT_FORMAT_CUSTOM=y
 #BR2_TARGET_UBOOT_FORMAT_CUSTOM_NAME="u-boot-rockchip.bin"
 
-## uboot blobs from Rochip rkbin :
+## b1) uboot blobs from Rochip rkbin :
 #BR2_TARGET_UBOOT_NEEDS_ROCKCHIP_RKBIN=y
 
-## TPL from Rockchip-blobs & BL31/BL32 Built with ATF / TEE
+## b2)TPL from Rockchip-blobs & BL31/BL32 Built with ATF / TEE
 #BR2_TARGET_UBOOT_NEEDS_TPL=y
 #BR2_TARGET_UBOOT_NEEDS_ATF_BL31=y
 #BR2_TARGET_UBOOT_NEEDS_ATF_BL31_ELF=y
@@ -98,29 +98,21 @@ BR2_TARGET_GRUB2_INSTALL_TOOLS=y
 #BR2_TARGET_OPTEE_OS_NEEDS_PYTHON_CRYPTOGRAPHY=y
 #BR2_TARGET_OPTEE_OS_ADDITIONAL_VARIABLES="CFG_DT=y CFG_CORE_ARM64_PA_BITS=48 CFG_TEE_CORE_LOG_LEVEL=3 CFG_WITH_ARM_TRUSTED_FW=y CFG_USER_TA_TARGETS=ta_arm64"
 
-######################### KERNEL #########################
+############## 2/KERNEL ###############
 
 BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION=y
 BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.18.36"
+BR2_LINUX_KERNEL_LZ4=y
+BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y
+BR2_LINUX_KERNEL_NEEDS_HOST_PYTHON3=y
 
-### config For GRUB
+### a) config For GRUB
 BR2_LINUX_KERNEL_USE_ARCH_DEFAULT_CONFIG=y
 BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/haos.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/docker.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless-pci.config $(BR2_EXTERNAL_HAOS_PATH)/board/arm-uefi/generic-aarch64/kernel.config"
 
-### Config fro Uboot
-#BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
-# HAOS default kernel-arm64-rockchip.config
-#BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/kernel-arm64-rockchip.config"
-# Armbian 6.18 current kernel : confighttps://github.com/armbian/build/blob/main/config/kernel/linux-rockchip64-current.config
-#BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_HAOS_PATH)/board/radxa/rock5b/armbian-kernel.config"
-BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/haos.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/docker.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless-pci.config $(BR2_EXTERNAL_HAOS_PATH)/board/radxa/rock5b/kernel.config"
-
-
-BR2_LINUX_KERNEL_LZ4=y
-BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y
+### b) Config for Uboot
 BR2_LINUX_KERNEL_NEEDS_HOST_LIBELF=y
-BR2_LINUX_KERNEL_NEEDS_HOST_PYTHON3=y
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
 #BR2_LINUX_KERNEL_CUSTOM_DTS_PATH="/arch/arm64/boot/dts/rockchip"
 BR2_LINUX_KERNEL_INTREE_DTS_NAME="rockchip/rk3588-rock-5b"
@@ -129,14 +121,15 @@ BR2_LINUX_KERNEL_INTREE_DTSO_NAMES="rockchip/rk3588-rock-5b-pcie-srns rockchip/r
 BR2_LINUX_KERNEL_DTB_KEEP_DIRNAME=y
 BR2_LINUX_KERNEL_DTB_OVERLAY_SUPPORT=y
 #BR2_LINUX_KERNEL_INSTALL_TARGET=y
+#BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
+# HAOS default kernel-arm64-rockchip.config
+#BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/kernel-arm64-rockchip.config"
+# Armbian 6.18 current kernel : confighttps://github.com/armbian/build/blob/main/config/kernel/linux-rockchip64-current.config
+#BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_HAOS_PATH)/board/radxa/rock5b/armbian-kernel.config"
+#BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/haos.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/docker.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless-pci.config $(BR2_EXTERNAL_HAOS_PATH)/board/radxa/rock5b/kernel.config"
 
-#BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="7.0"
-#BR2_KERNEL_HEADERS_AS_KERNEL=y
-#BR2_KERNEL_HEADERS_7_0=y
+############## 3/HOST PACKAGES ###############
 
-#BR2_LINUX_KERNEL_NEEDS_HOST_PYTHON3=y
-
-################# Host Packages ###################
 BR2_PACKAGE_HOST_DOSFSTOOLS=y
 BR2_PACKAGE_HOST_E2FSPROGS=y
 BR2_PACKAGE_HOST_GENIMAGE=y
@@ -154,7 +147,7 @@ BR2_PACKAGE_HOST_SWIG=y
 #BR2_PACKAGE_HOST_CRYPTSETUP=y
 #BR2_PACKAGE_HOST_DTC=y
 
-################# PACKAGES ############################
+############## 4/PACKAGES ###############
 
 BR2_PACKAGE_APPARMOR=y
 BR2_PACKAGE_APPARMOR_PROFILES=y
@@ -253,7 +246,7 @@ BR2_PACKAGE_WPA_SUPPLICANT_WPA3=y
 #BR2_PACKAGE_HAILO_PCI is not set
 
 
-################# RK3588 NPU needs MESA 26.0.6 ###################
+############## 5/CUSTOM PACKAGES ###############
 
 #BR2_PACKAGE_MESA3D=y
 #BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_ROCKET=y
