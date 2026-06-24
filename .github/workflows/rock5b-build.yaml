@@ -1,6 +1,6 @@
 # Home Assistant Operating System build workflow
 
-name: OS build
+name: Rock5b HAOS build
 
 on:
   workflow_dispatch:
