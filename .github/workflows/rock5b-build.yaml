@@ -1,6 +1,6 @@
 # Home Assistant Operating System build workflow
 
-name: Rock5B HAOS build
+name: OS build
 
 on:
   workflow_dispatch:
@@ -10,6 +10,11 @@ on:
         required: false
         type: string
         default: 'rock5b'
+      run_tests:
+        description: 'Run tests after build'
+        required: true
+        type: boolean
+        default: true
       hassio_channel:
         description: 'Release channel to use (default: stable for GH releases, dev otherwise)'
         type: choice
@@ -71,9 +76,9 @@ jobs:
           PUBLISH_BUILD: ${{ steps.check_publish.outputs.publish_build }}
         run: |
           version_dev="dev$(date --utc +'%Y%m%d')"
-          # if [ "${{ env.PUBLISH_BUILD }}" != "true" ] || [ "${{ github.ref }}" != "refs/heads/dev" ]; then
-          #   version_dev="dev$(date +%s)"
-          # fi
+#          if [ "${{ env.PUBLISH_BUILD }}" != "true" ] || [ "${{ github.ref }}" != "refs/heads/dev" ]; then
+#            version_dev="dev$(date +%s)"
+#          fi
           echo "Development version \"${version_dev}\""
           echo "version_dev=${version_dev}" >> $GITHUB_OUTPUT
 
@@ -135,6 +140,33 @@ jobs:
             fi
           fi
 
+      - name: Validate deployment and version against publish channel
+        if: ${{ steps.check_publish.outputs.publish_build == 'true' }}
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          VERSION_FULL: ${{ steps.version.outputs.version_full }}
+        run: |
+          . "${GITHUB_WORKSPACE}/buildroot-external/meta"
+          case "${CHANNEL}" in
+            dev)    expected_deployment="development"; version_re='^[0-9]+\.[0-9]+\.dev[0-9]+$' ;;
+            beta)   expected_deployment="staging";     version_re='^[0-9]+\.[0-9]+\.rc[0-9]+$' ;;
+            stable) expected_deployment="production";  version_re='^[0-9]+\.[0-9]+$' ;;
+            *)
+              echo "::error::Refusing to publish to an unknown '${CHANNEL}' channel." \
+                "Channel must be 'dev', 'beta' or 'stable'."
+              exit 1
+              ;;
+          esac
+          if [ "${DEPLOYMENT}" != "${expected_deployment}" ]; then
+            echo "::error::Deployment mismatch: publishing to '${CHANNEL}' requires DEPLOYMENT='${expected_deployment}'" \
+              "but buildroot-external/meta has DEPLOYMENT='${DEPLOYMENT}'."
+            exit 1
+          fi
+          if [[ ! "${VERSION_FULL}" =~ ${version_re} ]]; then
+            echo "::error::Version '${VERSION_FULL}' does not match the '${CHANNEL}' channel format ${version_re}."
+            exit 1
+          fi
+
       - name: Create build matrix
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         id: generate_matrix
@@ -166,15 +198,15 @@ jobs:
             }
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.11.1
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
       - name: Log in to the GitHub container registry
-        uses: docker/login-action@v3.5.0
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
             registry: ghcr.io
             username: ${{ github.repository_owner }}
             password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push
-        uses: docker/build-push-action@v6.18.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         id: build_haos_builder
         with:
           context: .
@@ -195,6 +227,16 @@ jobs:
           buildroot-external/scripts/generate-signing-key.sh cert.pem key.pem
           echo "self_signed_cert=true" >> $GITHUB_OUTPUT
 
+      - name: Check signing certificate validity
+        env:
+          RAUC_CERTIFICATE: ${{ secrets.RAUC_CERTIFICATE }}
+        if: env.RAUC_CERTIFICATE != ''
+        run: |
+          echo -e "-----BEGIN CERTIFICATE-----\n${RAUC_CERTIFICATE}\n-----END CERTIFICATE-----" > signing-cert.pem
+          # 760 days ~ 25 months (the OS support window, with margin)
+          scripts/check-signing-validity.sh signing-cert.pem buildroot-external/ota/rel-ca.pem 760
+          rm -f signing-cert.pem
+
       - name: Create signing key
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: steps.generate_signing_key.outcome == 'success'
@@ -212,11 +254,11 @@ jobs:
     strategy:
       fail-fast: ${{ github.event_name == 'release' }}
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
-    runs-on: ubuntu-22.04
+    runs-on: ha_buildhost
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: true
           persist-credentials: false
@@ -281,13 +323,12 @@ jobs:
             make BR2_CHECK_DOTCONFIG_OPTS="--github-format --strip-path-prefix=/build/" linux-check-dotconfig
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: haos-image-${{ matrix.board.id }}
-          path: |
-            output/images/haos_*.img.xz
-            output/images/haos_*.raucb
-          if-no-files-found: error
+        uses: actions/upload-artifact@v4
+        name: haos-image-${{ matrix.board.id }}
+        path: |
+          output/images/haos_*.img.xz
+          output/images/haos_*.raucb
+        if-no-files-found: error
 
       - name: Generate build summary
         run: |
