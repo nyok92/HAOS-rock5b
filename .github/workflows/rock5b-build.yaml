@@ -285,8 +285,8 @@ jobs:
         with:
           name: haos-image-${{ matrix.board.id }}
           path: |
-            output/images/haos_*.img.xz
-            output/images/haos_*.raucb
+            build/output/images/haos_*.img.xz
+            build/output/images/haos_*.raucb
           if-no-files-found: error
 
       - name: Generate build summary
