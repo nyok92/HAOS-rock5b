@@ -212,7 +212,7 @@ jobs:
     strategy:
       fail-fast: ${{ github.event_name == 'release' }}
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
-    runs-on: ha_buildhost
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout source
