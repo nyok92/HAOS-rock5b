@@ -122,7 +122,7 @@ BR2_LINUX_KERNEL_INTREE_DTS_NAME="rockchip/rk3588-rock-5b"
 BR2_LINUX_KERNEL_DTB_OVERLAY_SUPPORT=y
 #BR2_LINUX_KERNEL_INSTALL_TARGET=y
 BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
-#BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/haos.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/docker.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless-pci.config $(BR2_EXTERNAL_HAOS_PATH)/board/radxa/rock5b/kernel.config"
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/haos.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/docker.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless.config $(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/device-support-wireless-pci.config $(BR2_EXTERNAL_HAOS_PATH)/board/radxa/rock5b/kernel.config"
 
 # HAOS default kernel-arm64-rockchip.config
 BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_HAOS_PATH)/kernel/v6.18.y/kernel-arm64-rockchip.config"
