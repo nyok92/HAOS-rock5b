@@ -1,1 +1,1 @@
-earlycon=ttyS0,1500000 console=ttyS0,1500000n8 console=tty0
+earlycon console=ttyS0,1500000n8 console=tty0
