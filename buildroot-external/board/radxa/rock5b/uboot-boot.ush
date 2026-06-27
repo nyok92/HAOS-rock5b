@@ -99,8 +99,8 @@ echo "Trying 'kaslrseed' command... Info: 'Unknown command' can be safely ignore
 kaslrseed # @TODO: This gives an error (Unknown command ' kaslrseed ' - try 'help') on many devices since CONFIG_CMD_KASLRSEED is not enabled
 
 echo "Starting kernel with args ${bootargs}"
-#booti ${kernel_addr_r} - ${fdt_addr_r}
-booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdt_addr_r}
+booti ${kernel_addr_r} - ${fdt_addr_r}
+#booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdt_addr_r}
 
 echo "Boot failed, resetting..."
 reset
