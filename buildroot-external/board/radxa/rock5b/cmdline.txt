@@ -1,1 +1,1 @@
-earlycon console=ttyS0,1500000n8
+earlycon earlyprintk console=ttyS0,1500000n8
