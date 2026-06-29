@@ -5,12 +5,12 @@ function haos_pre_image() {
     local BOOT_DATA="$(path_boot_dir)"
 
     cp "${BINARIES_DIR}/boot.scr" "${BOOT_DATA}/boot.scr"
-    cp "${BINARIES_DIR}"/*.dtb "${BOOT_DATA}/"
+    cp "${BINARIES_DIR}/rockchip"/*.dtb "${BOOT_DATA}/"
 
-    if ls "${BINARIES_DIR}"/*.dtbo 1> /dev/null 2>&1; then
-        echo "Found .dtbo files in ${BINARIES_DIR}"
+    if ls "${BINARIES_DIR}/overlays"/*.dtbo 1> /dev/null 2>&1; then
+        echo "Found .dtbo files in ${BINARIES_DIR}/overlays"
         mkdir -p "${BOOT_DATA}/overlays"
-        cp "${BINARIES_DIR}"/*.dtbo "${BOOT_DATA}/overlays/"
+        cp "${BINARIES_DIR}/overlays"/*.dtbo "${BOOT_DATA}/overlays/"
     fi
 
     cp "${BOARD_DIR}/boot-env.txt" "${BOOT_DATA}/haos-config.txt"
