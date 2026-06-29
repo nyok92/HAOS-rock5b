@@ -1,3 +1,7 @@
+part start ${devtype} ${devnum} hassos-bootstate mmc_env
+${devtype} dev ${devnum}
+
+#Test
 # print some debugging info
 echo "-----[ Initial State ]-----------------------------------"
 #echo "userEnv..........: "${userEnv}
@@ -28,9 +32,6 @@ echo "extraargs........: "${extraargs}
 echo "extraboardargs...: "${extraboardargs}
 echo "bootargs.........: "${bootargs}
 echo "--------------------------------------------------------"
-
-part start ${devtype} ${devnum} hassos-bootstate mmc_env
-${devtype} dev ${devnum}
 
 setenv loadbootstate " \
     echo 'loading env...'; \
