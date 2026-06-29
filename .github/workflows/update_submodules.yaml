@@ -1,8 +1,6 @@
 name: Update submodules
 
 on:
-  schedule:
-    - cron: '8 20 * * *'   
   workflow_dispatch:
 
 jobs:
