@@ -1,28 +1,5 @@
-part start ${devtype} ${devnum} hassos-bootstate mmc_env
+part start ${devtype} ${devnum} 6 mmc_env
 ${devtype} dev ${devnum}
-
-# print some debugging info
-echo "-----[ Initial State ]-----------------------------------"
-echo "load_addr........: "${load_addr}
-echo "filesize.........: "${filesize}
-echo "devtype..........: "${devtype}
-echo "devnum...........: "${devnum}
-echo "prefix...........: "${prefix}
-echo "mmc_env..........: "${mmc_env}
-echo "ramdisk_addr_r...: "${ramdisk_addr_r}
-echo "boot_partnum.....: "${boot_partnum}
-echo "kernel_partnum...: "${kernel_partnum}
-echo "fdtfile..........: "${fdtfile}
-echo "fdt_addr_r.......: "${fdt_addr_r}
-echo "overlays.........: "${overlays}
-echo "overlay_prefix...: "${overlay_prefix}
-echo "distro_bootpart..: "${distro_bootpart}
-echo "kernel_addr_r....: "${kernel_addr_r}
-echo "initrdfile.......: "${initrdfile}
-echo "partuuid.........: "${partuuid}
-echo "bootargs.........: "${bootargs}
-echo "--------------------------------------------------------"
-
 setenv loadbootstate " \
     echo 'loading env...'; \
     ${devtype} read ${ramdisk_addr_r} ${mmc_env} 0x40; \
@@ -41,42 +18,41 @@ test -n "${BOOT_B_LEFT}" || setenv BOOT_B_LEFT 3
 # Allows ConditionFirstBoot=
 test -n "${MACHINE_ID}" || setenv BOOT_CONDITION "systemd.condition-first-boot=true"
 
-# HAOS bootargs
-setenv bootargs_haos "zram.enabled=1 zram.num_devices=3 systemd.machine_id=${MACHINE_ID} fsck.repair=yes ${BOOT_CONDITION}"
+# HassOS bootargs
+setenv bootargs_hassos "zram.enabled=1 zram.num_devices=3 systemd.machine_id=${MACHINE_ID} fsck.repair=yes ${BOOT_CONDITION}"
 
-# HAOS system A/B
+# HassOS system A/B
 setenv bootargs_a "root=PARTUUID=8d3d53e3-6d49-4c38-8349-aff6859e82fd ro rootwait"
 setenv bootargs_b "root=PARTUUID=a3ec664e-32ce-4665-95ea-7ae90ce9aa20 ro rootwait"
 
-part number ${devtype} ${devnum} hassos-boot boot_partnum
-
 # Load environment from haos-config.txt
-if test -e ${devtype} ${devnum}:${boot_partnum} haos-config.txt; then
-  fatload ${devtype} ${devnum}:${boot_partnum} ${ramdisk_addr_r} haos-config.txt
+if test -e ${devtype} ${devnum}:1 haos-config.txt; then
+  echo 'loading environment from haos-config.txt'
+  fatload ${devtype} ${devnum}:1 ${ramdisk_addr_r} haos-config.txt
   env import -t ${ramdisk_addr_r} ${filesize}
 fi
 
 # Load extraargs
-fileenv ${devtype} ${devnum}:${boot_partnum} ${ramdisk_addr_r} cmdline.txt cmdline
+fileenv ${devtype} ${devnum}:1 ${ramdisk_addr_r} cmdline.txt cmdline
 
 # Load device tree
 # fdtfile variable is read from haos-config.txt
 
 echo "Loading standard device tree ${fdtfile}"
-fatload ${devtype} ${devnum}:${boot_partnum} ${fdt_addr_r} ${fdtfile}
+fatload ${devtype} ${devnum}:1 ${fdt_addr_r} ${fdtfile}
 fdt addr ${fdt_addr_r}
 
 # load dt overlays
 fdt resize 65536
 for overlay_file in ${overlays}; do
-  if fatload ${devtype} ${devnum}:${boot_partnum} ${ramdisk_addr_r} overlays/${overlay_file}.dtbo; then
+  if fatload ${devtype} ${devnum}:1 ${ramdisk_addr_r} overlays/${overlay_file}.dtbo; then
     echo "Applying kernel provided DT overlay ${overlay_file}.dtbo"
     fdt apply ${ramdisk_addr_r} || setenv overlay_error "true"
   fi
 done
 if test "${overlay_error}" = "true"; then
   echo "Error applying DT overlays, restoring original DT"
-  fatload ${devtype} ${devnum}:${boot_partnum} ${fdt_addr_r} ${fdtfile}
+  fatload ${devtype} ${devnum}:1 ${fdt_addr_r} ${fdtfile}
 fi
 
 setenv bootargs
@@ -87,18 +63,16 @@ for BOOT_SLOT in "${BOOT_ORDER}"; do
     if test ${BOOT_A_LEFT} -gt 0; then
       setexpr BOOT_A_LEFT ${BOOT_A_LEFT} - 1
       echo "Trying to boot slot A, ${BOOT_A_LEFT} attempts remaining. Loading kernel ..."
-      part number ${devtype} ${devnum} hassos-kernel0 kernel_partnum
-      if load ${devtype} ${devnum}:${kernel_partnum} ${kernel_addr_r} Image; then
-          setenv bootargs "${bootargs_haos} ${bootargs_a} rauc.slot=A ${cmdline}"
+      if load ${devtype} ${devnum}:2 ${kernel_addr_r} Image; then
+          setenv bootargs "${bootargs_hassos} ${bootargs_a} rauc.slot=A ${cmdline}"
       fi
     fi
   elif test "x${BOOT_SLOT}" = "xB"; then
     if test ${BOOT_B_LEFT} -gt 0; then
       setexpr BOOT_B_LEFT ${BOOT_B_LEFT} - 1
       echo "Trying to boot slot B, ${BOOT_B_LEFT} attempts remaining. Loading kernel ..."
-      part number ${devtype} ${devnum} hassos-kernel1 kernel_partnum
-      if load ${devtype} ${devnum}:${kernel_partnum} ${kernel_addr_r} Image; then
-          setenv bootargs "${bootargs_haos} ${bootargs_b} rauc.slot=B ${cmdline}"
+      if load ${devtype} ${devnum}:4 ${kernel_addr_r} Image; then
+          setenv bootargs "${bootargs_hassos} ${bootargs_b} rauc.slot=B ${cmdline}"
       fi
     fi
   fi
@@ -107,45 +81,14 @@ done
 if test -n "${bootargs}"; then
   run storebootstate
 else
-  # A failed kernel load must consume a boot attempt too, otherwise the counters
-  # never count down and we never fall back. Persist the decremented counters
-  # and only re-arm once both slots are exhausted, not on every failure (#4788).
-  if test ${BOOT_A_LEFT} -le 0 && test ${BOOT_B_LEFT} -le 0; then
-    echo "No valid slot found, resetting tries to 3"
-    setenv BOOT_A_LEFT 3
-    setenv BOOT_B_LEFT 3
-  fi
+  echo "No valid slot found, resetting tries to 3"
+  setenv BOOT_A_LEFT 3
+  setenv BOOT_B_LEFT 3
   run storebootstate
   reset
 fi
 
-# print some debugging info
-echo "-----[ Initial State ]-----------------------------------"
-echo "load_addr........: "${load_addr}
-echo "filesize.........: "${filesize}
-echo "devtype..........: "${devtype}
-echo "devnum...........: "${devnum}
-echo "prefix...........: "${prefix}
-echo "mmc_env..........: "${mmc_env}
-echo "ramdisk_addr_r...: "${ramdisk_addr_r}
-echo "boot_partnum.....: "${boot_partnum}
-echo "kernel_partnum...: "${kernel_partnum}
-echo "fdtfile..........: "${fdtfile}
-echo "fdt_addr_r.......: "${fdt_addr_r}
-echo "overlays.........: "${overlays}
-echo "overlay_prefix...: "${overlay_prefix}
-echo "distro_bootpart..: "${distro_bootpart}
-echo "kernel_addr_r....: "${kernel_addr_r}
-echo "initrdfile.......: "${initrdfile}
-echo "partuuid.........: "${partuuid}
-echo "bootargs.........: "${bootargs}
-echo "--------------------------------------------------------"
-
-
-echo "Trying 'kaslrseed' command... Info: 'Unknown command' can be safely ignored since 'kaslrseed' does not apply to all boards."
-kaslrseed # @TODO: This gives an error (Unknown command ' kaslrseed ' - try 'help') on many devices since CONFIG_CMD_KASLRSEED is not enabled
-
-echo "Starting kernel"
+echo "Starting kernel with args ${bootargs}"
 booti ${kernel_addr_r} - ${fdt_addr_r}
 
 echo "Boot failed, resetting..."
