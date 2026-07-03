@@ -1,6 +1,3 @@
-
-###########################################
-
 part start mmc ${devnum} 9 mmc_env
 mmc dev ${devnum}
 setenv loadbootstate " \
