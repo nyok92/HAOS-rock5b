@@ -1,0 +1,17 @@
+# Boot environment template for rock5b (used by hassos/rauc scripts)
+# This is a minimal placeholder — edit if your board requires special env or SPL handling.
+
+# Device / partition layout
+# Example: set boot partition label used by create_disk_image
+# (hassos scripts expect hassos-boot / hassos-rootfs etc.)
+# Nothing mandatory here; keep for documentation.
+
+# Modify this to enable dt overlays (see README for further information)
+# Available overlays:
+
+# Multiple overlays must be separated by a space. For example, to turn off both leds:
+# overlays=rk3399-rock-4c-plus-disable-hearbeat rk3399-rock-4c-plus-disable-power-led
+# overlays=rk3399-disable-wifi-interrupts
+
+# Select device tree (DO NOT MODIFY)
+fdtfile=rk3588-rock-5b.dtb
