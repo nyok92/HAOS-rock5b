@@ -20,6 +20,8 @@ categories:
     label: 'board/khadas'
   - title: 'Generic aarch64'
     label: 'board/generic-aarch64'
+  - title: 'Rock 5B'
+    label: 'board/rock5b'
   - title: 'Documentation'
     label: 'documentation'
   - title: 'Build System'
