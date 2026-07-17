@@ -12,6 +12,8 @@
 # Multiple overlays must be separated by a space. For example, to turn off both leds:
 # overlays=rk3399-rock-4c-plus-disable-hearbeat rk3399-rock-4c-plus-disable-power-led
 # overlays=rk3399-disable-wifi-interrupts
+overlays=rockchip-rk3588-sata2
 
 # Select device tree (DO NOT MODIFY)
 fdtfile=rk3588-rock-5b.dtb
+
