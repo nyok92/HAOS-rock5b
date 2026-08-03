@@ -1,267 +1,40 @@
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
-	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
-	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 0717A3D2FFD;
-	Thu,  9 Apr 2026 13:51:36 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775742698; cv=none; b=ZpOeepd77ioj0sUQpfiOecy9cl781EvXgwtajP9u5by8e62aMpTEWGFw3mb08TB2+dJ6bdM4rHjHWpOtozQOCBYGMFkCK/rm7qjUaKgS4qXeGv5qnQlncBfqnZ0hEw5LR7o3Hz3NETLjwDzfTUe2QPgM698QhFb8g2oTSuE1NuM=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775742698; c=relaxed/simple;
-	bh=zb8Kdcld56GkDD3eedBbJU1WAMrgjQXCYOIVVPIDCuE=;
-	h=From:Subject:Date:Message-Id:MIME-Version:Content-Type:To:Cc; b=Q/R+aSw1rfC2prxQM1knYadVkUMjqOBlRTaHB6Q3Hmc2HPjdOtQKUpp3Z9W2ruxPb6Qd2fS2T0uLbx0AIZ02GcjWRRDKq/ykB0rgrIZd/YG5VJQrNTAj7iHfM5OV0vYDTruirBPdHj1DWvevoIJCd0/4OwWjOzB+6znIvdg6qKQ=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=i54P+b5J; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="i54P+b5J"
-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
-	s=mail; t=1775742688;
-	bh=zb8Kdcld56GkDD3eedBbJU1WAMrgjQXCYOIVVPIDCuE=;
-	h=From:Subject:Date:To:Cc:From;
-	b=i54P+b5JUflbk2iAP5O3PJHSnKjPJHg0+jrZX+sOPe8KoX9ChZlc8aZPy/TMgV8R0
-	 Zhiv0TZpgVEx7/JYko257JDLmncVuXkQaPw7R7CEgTE6sUS14SFqSd6RFMl0Ud5F8y
-	 QEeLDC36E2QOvH8JY8aMPIZhSRSXRmt0s/s1ZQ+Jl+Q9iWH+JVT/FNm3Hnsiz0owCv
-	 +fuititxsucYcIDa0U2jFWQ4A+XYyzYrCI9mR0gM4PHLMedgYWTh+O2dnKFfdcW3/F
-	 QfQmj7OSSdn5N30KlYVuCmdFpVrK3rAVJJIbInfibb6Faw1L+AlelbEF+a63svX2NH
-	 GWyFnWPEawcHw==
-Received: from [192.168.0.15] (unknown [100.64.0.170])
-	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest SHA256)
-	(No client certificate requested)
-	(Authenticated sender: detlev)
-	by bali.collaboradmins.com (Postfix) with ESMTPSA id 47E1517E0CA9;
-	Thu,  9 Apr 2026 15:51:27 +0200 (CEST)
-From: Detlev Casanova <detlev.casanova@collabora.com>
-Subject: [PATCH 0/7] media: rkvdec: Enable multi-core support
-Date: Thu, 09 Apr 2026 09:50:35 -0400
-Message-Id: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
-MIME-Version: 1.0
+From patchwork Thu Apr  9 13:50:36 2026
 Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: 7bit
-X-B4-Tracking: v=1; b=H4sIAAAAAAAC/yXMSQ6DMAxA0asgrxspCVPoVSoWkBhwy1A5gJAQd
- yfA8i3+38EjE3p4RzswruRpGgPUKwLbVWOLglwwaKkzmUgj+Lc6tGJY+pnsxCgKY2LlqlTJXEP
- I/owNbffyUz72S/1FO18fOI4TEu/+mnQAAAA=
-X-Change-ID: 20260408-rkvdec-multicore-98831da51072
-To: Mauro Carvalho Chehab <mchehab@kernel.org>, 
- Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>, 
- Heiko Stuebner <heiko@sntech.de>, 
- Nicolas Dufresne <nicolas.dufresne@collabora.com>, 
- Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
- linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
- linux-arm-kernel@lists.infradead.org, 
- Detlev Casanova <detlev.casanova@collabora.com>
-X-Mailer: b4 0.15.1
-
-Since the driver is used for decoding on rk3588 and that the SoC has
-2 identical decoding cores, enable support for it.
-
-Instead of exposing 2 v4l2 devices to userspace, the driver will only
-expose one and handle the 2 cores transparently.
-
-The 2 cores are able to work in parallel, but only contexts are
-parallelized: 1 stream, that uses 1 context, will only be able to use
-1 core as it usually needs previous frames already decoded to use as
-reference frames.
-To avoid complex scheduling, only different streams can use cores at the
-same time.
-
-To achieve this, the v4l2_m2m_buf_done_and_job_finish() had to be split
-in a done and a finish part (still keeping the unsplit function for other
-drivers). That allows the driver to get new jobs to run while the previous
-one is still running.
-The job_ready() callback is used to avoid scheduling multiple jobs from
-the same context.
-
-The IOMMU support is in a different commit, as it needed a bit more
-thought to work correctly, but I'm wondering if it should be merged with
-the multicore support commit.
-
-A fix for the RCB (Row and Cols Buffer) size computation is also provided
-as it was causing issues with some fluster tests.
-
-Performance-wise, fluster doesn't seem to run much faster, but I tested
-with an HEVC test video from Jellyfin and observed that frames start
-dropping with 6 concurrent gstreamer instances, instead of 4 without
-multi-core enabled.
-
-Signed-off-by: Detlev Casanova <detlev.casanova@collabora.com>
----
-Detlev Casanova (7):
-      media: v4l2-mem2mem: Add v4l2_m2m_buf_done_manual()
-      media: v4l2-mem2mem: Remove WARN_ON() in v4l2_m2m_job_finish()
-      media: rkvdec: Keep RCB to the correct size
-      media: rkvdec: Remove unused need_reset
-      media: rkvdec: Add multicore support
-      media: rkvdec: Wait for all buffers before stop_streaming
-      media: rkvdec: Add multicore IOMMU support
-
- .../media/platform/rockchip/rkvdec/rkvdec-h264.c   |  17 +-
- .../media/platform/rockchip/rkvdec/rkvdec-hevc.c   |  16 +-
- .../media/platform/rockchip/rkvdec/rkvdec-rcb.c    |  77 ++--
- .../media/platform/rockchip/rkvdec/rkvdec-rcb.h    |   8 +-
- .../platform/rockchip/rkvdec/rkvdec-vdpu381-h264.c |  24 +-
- .../platform/rockchip/rkvdec/rkvdec-vdpu381-hevc.c |  24 +-
- .../platform/rockchip/rkvdec/rkvdec-vdpu383-h264.c |  24 +-
- .../platform/rockchip/rkvdec/rkvdec-vdpu383-hevc.c |  26 +-
- .../media/platform/rockchip/rkvdec/rkvdec-vp9.c    |  27 +-
- drivers/media/platform/rockchip/rkvdec/rkvdec.c    | 482 +++++++++++++--------
- drivers/media/platform/rockchip/rkvdec/rkvdec.h    |  31 +-
- drivers/media/v4l2-core/v4l2-mem2mem.c             |  34 +-
- include/media/v4l2-mem2mem.h                       |  20 +
- 13 files changed, 500 insertions(+), 310 deletions(-)
----
-base-commit: 3036cd0d3328220a1858b1ab390be8b562774e8a
-change-id: 20260408-rkvdec-multicore-98831da51072
-
-Best regards,
---  
-Detlev Casanova <detlev.casanova@collabora.com>
-
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
-	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
-	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id A3B463A2550;
-	Thu,  9 Apr 2026 13:51:37 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775742699; cv=none; b=URY7Z/WKALWb+NOM1D6V9M1BS/eZGU9fEGlXCeKCyVQ/RYI9tu0dZ7iV9aviyQsPxx8ySbd8x6ad+XWZ9NBHaKLBG6Lff2/gtoWk6wl4wJbbk9X2Gmvp+pHBqfTVNeiTsu0dA3h0PcinB2q4SVbFujs/0k+buC0QD3yXkAauxis=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775742699; c=relaxed/simple;
-	bh=KyzQwUnfDm1fztBC6M2uhc6YYJnSNz50uKom2fCwuZQ=;
-	h=From:Date:Subject:MIME-Version:Content-Type:Message-Id:References:
-	 In-Reply-To:To:Cc; b=b7U8dBdjh4DRrYErltsb/9gg6JkROQ1JJIYyv2573TOuX1YgS/WuBn+hr0PivObXxMmOQNS8+gZMf0drZkxLty0lh4Ph78sCeadUTsZDr3hQSmMQvOdyR/F2Ohv+lOppTQnhA5LjFgt6HK2j9ZfkIfA6nvCw5HdgLoZJ20KoaAg=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=l4XS61sD; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="l4XS61sD"
-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
-	s=mail; t=1775742696;
-	bh=KyzQwUnfDm1fztBC6M2uhc6YYJnSNz50uKom2fCwuZQ=;
-	h=From:Date:Subject:References:In-Reply-To:To:Cc:From;
-	b=l4XS61sDtun10RvRrmAQdt2YKZsc3mBoeRg457cBWGGTuDs9yhOa93DjK/eKkcis/
-	 I2jBM8k7jCXzYrakt2XSG/SUk+l3jYS0EN9pPNVJb45KOl9scpyPpxGFWTIw7QC0gQ
-	 jOjaQDiSsKbnF1N7LAFSnfWJZ3zee3/v9sIi+a4DHcQ+Vmm1dq8Q82wEr7pUTLkUj6
-	 LykLGfPf9suuSmY/syNld4fwOqDt+pJ6tlgud/jlwlMDKpO/Bj1hzOY7/BOvP58UIW
-	 +3bNDUZyohkpOSW3EJvvvn70SBDrd6CIwaJga2/V6QSTkv3EST0WAPHSTi6mCuUwOg
-	 Pu3/rB7H6f5DQ==
-Received: from [192.168.0.15] (unknown [100.64.0.170])
-	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest SHA256)
-	(No client certificate requested)
-	(Authenticated sender: detlev)
-	by bali.collaboradmins.com (Postfix) with ESMTPSA id AAE7917E1340;
-	Thu,  9 Apr 2026 15:51:34 +0200 (CEST)
-From: Detlev Casanova <detlev.casanova@collabora.com>
-Date: Thu, 09 Apr 2026 09:50:39 -0400
-Subject: [PATCH 4/7] media: rkvdec: Remove unused need_reset
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
 MIME-Version: 1.0
-Content-Type: text/plain; charset="utf-8"
 Content-Transfer-Encoding: 7bit
-Message-Id: <20260409-rkvdec-multicore-v1-4-62b316abf0f7@collabora.com>
-References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-In-Reply-To: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-To: Mauro Carvalho Chehab <mchehab@kernel.org>, 
- Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>, 
- Heiko Stuebner <heiko@sntech.de>, 
- Nicolas Dufresne <nicolas.dufresne@collabora.com>, 
- Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
- linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
- linux-arm-kernel@lists.infradead.org, 
- Detlev Casanova <detlev.casanova@collabora.com>
-X-Mailer: b4 0.15.1
-
-A left-over from the iommu restore mecanism was forgotten.
-As need_reset is never set to true, the if has no use.
-
-The actual restore function is called above it vase the IRQ isn't in a
-success status.
-
-Signed-off-by: Detlev Casanova <detlev.casanova@collabora.com>
----
- drivers/media/platform/rockchip/rkvdec/rkvdec.c | 8 --------
- 1 file changed, 8 deletions(-)
-
-diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.c b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-index 31ddfcc58894..db2731af06cf 100644
---- a/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-+++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-@@ -1462,7 +1462,6 @@ static irqreturn_t vdpu381_irq_handler(struct rkvdec_ctx *ctx)
- {
- 	struct rkvdec_dev *rkvdec = ctx->dev;
- 	enum vb2_buffer_state state;
--	bool need_reset = 0;
- 	u32 status;
- 
- 	status = readl(rkvdec->regs + VDPU381_REG_STA_INT);
-@@ -1478,9 +1477,6 @@ static irqreturn_t vdpu381_irq_handler(struct rkvdec_ctx *ctx)
- 			rkvdec_iommu_restore(rkvdec);
- 	}
- 
--	if (need_reset)
--		rkvdec_iommu_restore(rkvdec);
--
- 	if (cancel_delayed_work(&rkvdec->watchdog_work))
- 		rkvdec_job_finish(ctx, state);
- 
-@@ -1491,7 +1487,6 @@ static irqreturn_t vdpu383_irq_handler(struct rkvdec_ctx *ctx)
- {
- 	struct rkvdec_dev *rkvdec = ctx->dev;
- 	enum vb2_buffer_state state;
--	bool need_reset = 0;
- 	u32 status;
- 
- 	status = readl(rkvdec->link + VDPU383_LINK_STA_INT);
-@@ -1507,9 +1502,6 @@ static irqreturn_t vdpu383_irq_handler(struct rkvdec_ctx *ctx)
- 		rkvdec_iommu_restore(rkvdec);
- 	}
- 
--	if (need_reset)
--		rkvdec_iommu_restore(rkvdec);
--
- 	if (cancel_delayed_work(&rkvdec->watchdog_work))
- 		rkvdec_job_finish(ctx, state);
- 
-
--- 
-2.53.0
-
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
+X-Patchwork-Submitter: Detlev Casanova <detlev.casanova@collabora.com>
+X-Patchwork-Id: 14517747
+Return-Path: 
+ <linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from bombadil.infradead.org (bombadil.infradead.org
+ [198.137.202.133])
 	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
 	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 841CF3D3489;
-	Thu,  9 Apr 2026 13:51:38 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775742700; cv=none; b=Pi6ugevXK5TbMclGI506+yXPIUkMk0CjEwz8/+nE7k8SpEn1CnK9EJYJITg3/GxAPrPSiVe+9du0/fPcRYgykfBG37ek2XcKBIDH/UPN8111dqVNFRkChHSkgL0klc4kEwctLipnVCjLsRh0hfDaopM3b4ewxrgj6LwbRPL71Ek=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775742700; c=relaxed/simple;
-	bh=EANjXK0pUgPsxuTannl80kTzacZ17wagSvF/zmR7XQE=;
-	h=From:Date:Subject:MIME-Version:Content-Type:Message-Id:References:
-	 In-Reply-To:To:Cc; b=N8NR8orMqIb5wzc7Uz5CMNnOkHo9gx7W8KdjNtjVBTV0BQvvC0y2UkVwp/S246VNPIU4vhNKAw5KkYtrFL6Y09YWWdppYWOixxPo+eIWPoeZ5aYwOuEbQz0HYfToQ+fxXnXP8xsfwg9msA0aoMHOCHWdF2sjMIRYuB3Pq4OWoBo=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=dXvO3xJx; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="dXvO3xJx"
+	by smtp.lore.kernel.org (Postfix) with ESMTPS id E5737EA3C5F
+	for <linux-rockchip@archiver.kernel.org>;
+ Thu,  9 Apr 2026 13:51:43 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/relaxed;
+	d=lists.infradead.org; s=bombadil.20210309; h=Sender:
+	Content-Transfer-Encoding:Content-Type:List-Subscribe:List-Help:List-Post:
+	List-Archive:List-Unsubscribe:List-Id:Cc:To:In-Reply-To:References:Message-Id
+	:MIME-Version:Subject:Date:From:Reply-To:Content-ID:Content-Description:
+	Resent-Date:Resent-From:Resent-Sender:Resent-To:Resent-Cc:Resent-Message-ID:
+	List-Owner; bh=rYembm/sVULGkrxmI/NTPpz7AiIiJWo1da54dp+J8tE=; b=By4S/IXjFmWnvk
+	WnlE/c7KrekZ8Dpi5SkENzJtEErmlEP12qHdsQPxV4D4UUkz/P6f5GzhycnKXIWQp3ZqleJwW7FP2
+	b7krIODrlbU0S/JDGkblIfiFx7nUAuE+GnueqFfsoDydSuTBqDubsMOLCUDREc/ej8OS2OiMJz0KR
+	p0iynHT9a79mvwLW5QZYgcQY3u7CTDzW99NI0FtpCoaZgvHkbs3LkXLzfphTydDMp3XqY347durBR
+	MV8zKcfbsB77pyuOAYgDm3UGsthNNkGARhiJW88RAq5QLEdk3VL0GQoLlxA7RzST7xS7aDQbJ8kH8
+	M/QIGcz3x1MY6EMxP8eQ==;
+Received: from localhost ([::1] helo=bombadil.infradead.org)
+	by bombadil.infradead.org with esmtp (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnJ-0000000Aa1F-30Hn;
+	Thu, 09 Apr 2026 13:51:41 +0000
+Received: from bali.collaboradmins.com ([148.251.105.195])
+	by bombadil.infradead.org with esmtps (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnC-0000000AZx9-1JoL;
+	Thu, 09 Apr 2026 13:51:36 +0000
 DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	s=mail; t=1775742690;
 	bh=EANjXK0pUgPsxuTannl80kTzacZ17wagSvF/zmR7XQE=;
@@ -274,7 +47,8 @@ DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	 xmDcvA5ir4z+w==
 Received: from [192.168.0.15] (unknown [100.64.0.170])
 	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest SHA256)
+	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest
+ SHA256)
 	(No client certificate requested)
 	(Authenticated sender: detlev)
 	by bali.collaboradmins.com (Postfix) with ESMTPSA id 2C1C917E0D23;
@@ -282,27 +56,38 @@ Received: from [192.168.0.15] (unknown [100.64.0.170])
 From: Detlev Casanova <detlev.casanova@collabora.com>
 Date: Thu, 09 Apr 2026 09:50:36 -0400
 Subject: [PATCH 1/7] media: v4l2-mem2mem: Add v4l2_m2m_buf_done_manual()
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
 MIME-Version: 1.0
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: 7bit
 Message-Id: <20260409-rkvdec-multicore-v1-1-62b316abf0f7@collabora.com>
 References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
 In-Reply-To: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-To: Mauro Carvalho Chehab <mchehab@kernel.org>, 
- Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>, 
- Heiko Stuebner <heiko@sntech.de>, 
- Nicolas Dufresne <nicolas.dufresne@collabora.com>, 
+To: Mauro Carvalho Chehab <mchehab@kernel.org>,
+ Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
+ Heiko Stuebner <heiko@sntech.de>,
+ Nicolas Dufresne <nicolas.dufresne@collabora.com>,
  Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
- linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
- linux-arm-kernel@lists.infradead.org, 
+Cc: kernel@collabora.com, linux-media@vger.kernel.org,
+ linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org,
+ linux-arm-kernel@lists.infradead.org,
  Detlev Casanova <detlev.casanova@collabora.com>
 X-Mailer: b4 0.15.1
+X-CRM114-Version: 20100106-BlameMichelson ( TRE 0.8.0 (BSD) ) MR-646709E3 
+X-CRM114-CacheID: sfid-20260409_065134_500087_99AF219D 
+X-CRM114-Status: GOOD (  14.67  )
+X-BeenThere: linux-rockchip@lists.infradead.org
+X-Mailman-Version: 2.1.34
+Precedence: list
+List-Id: Upstream kernel work for Rockchip platforms
+ <linux-rockchip.lists.infradead.org>
+List-Unsubscribe: <http://lists.infradead.org/mailman/options/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=unsubscribe>
+List-Archive: <http://lists.infradead.org/pipermail/linux-rockchip/>
+List-Post: <mailto:linux-rockchip@lists.infradead.org>
+List-Help: <mailto:linux-rockchip-request@lists.infradead.org?subject=help>
+List-Subscribe: <http://lists.infradead.org/mailman/listinfo/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=subscribe>
+Sender: "Linux-rockchip" <linux-rockchip-bounces@lists.infradead.org>
+Errors-To: 
+ linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org
 
 This function can be used to mark buffers as done, handling locking, but
 not finishing the job as it is done by v4l2_m2m_buf_done_and_finish_job().
@@ -403,29 +188,43 @@ index 31de25d792b9..6a36fc885f5f 100644
  v4l2_m2m_buf_done(struct vb2_v4l2_buffer *buf, enum vb2_buffer_state state)
  {
 
--- 
-2.53.0
-
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
+From patchwork Thu Apr  9 13:50:37 2026
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+X-Patchwork-Submitter: Detlev Casanova <detlev.casanova@collabora.com>
+X-Patchwork-Id: 14517746
+Return-Path: 
+ <linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from bombadil.infradead.org (bombadil.infradead.org
+ [198.137.202.133])
 	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
 	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 7E1CA3D4107;
-	Thu,  9 Apr 2026 13:51:39 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775742701; cv=none; b=pxQawypZouKx4cYfi0kh7S7Lg0sdv2tMew6E4Hz0mB9s1723pb3GiFLiuEwHhTqNGkUV8K2UnN08N+qucAAgtR71L6j8Wm2nxzlVZcwllExSgv7YN5rewGQBr9cjgoY+BJYKBtfH3aXgSr5deTmGN+mce0JGTtSqcO/fdYUULFg=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775742701; c=relaxed/simple;
-	bh=Uf3oawvhkOYDFsuF3t/kHZrtN6yz3uwa92uWH3g5zZM=;
-	h=From:Date:Subject:MIME-Version:Content-Type:Message-Id:References:
-	 In-Reply-To:To:Cc; b=shXA3ZOwE2JRqbc7SwfJuFLfINW+vMjURGHDpQbHZip3OEB3IGthvyJ8anArdRC7B8OYL8rYLnRt5LTbivHKAg/pQmQA3RSMJf4nr1SdAp+oDIQY1RJBCRGhGOqV+zmqPLmdNtlydGwDq5FVdrfYdf8OULbqJklFgQEi/kKFMh4=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=jOsFp6YU; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="jOsFp6YU"
+	by smtp.lore.kernel.org (Postfix) with ESMTPS id 672E9E98FB7
+	for <linux-rockchip@archiver.kernel.org>;
+ Thu,  9 Apr 2026 13:51:44 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/relaxed;
+	d=lists.infradead.org; s=bombadil.20210309; h=Sender:
+	Content-Transfer-Encoding:Content-Type:List-Subscribe:List-Help:List-Post:
+	List-Archive:List-Unsubscribe:List-Id:Cc:To:In-Reply-To:References:Message-Id
+	:MIME-Version:Subject:Date:From:Reply-To:Content-ID:Content-Description:
+	Resent-Date:Resent-From:Resent-Sender:Resent-To:Resent-Cc:Resent-Message-ID:
+	List-Owner; bh=ZkHtzyG/TyjdBdLJscBFabvq6wZvkLUiaq1VzqEJ1p0=; b=F1h68zAT+62cmU
+	o5hC702Kt+oVysn0w1L1prmfAIzOJqAYs2CS6CPDg7QyeQBkbnb5cZzG6n6m2XVclf4FpIPsWTzTm
+	+LBoMju+0XHIBvJPX1WRhQbJczisxmdrYyaIwCwLfz3AP8WDncEP71P/6ThdQLTyQ6hW2qHUXh+gw
+	lu5MaQIF69VJMIuL6L1Y9wBmie0a9m8WNA42gsgZws9RQLxe8Ex+7ob4+XQcNr4AZDOsrlvcE5AxD
+	6Fh+M5A+jU+CbWX5pAR0igFV+c1NwYjTzJxXj6S+pS2dThgcDn8YAdSLUWVr85ijGtNtrY+FhkAjD
+	0GtN8FO/Fw8E2XWsRDeQ==;
+Received: from localhost ([::1] helo=bombadil.infradead.org)
+	by bombadil.infradead.org with esmtp (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnK-0000000Aa2B-1Pho;
+	Thu, 09 Apr 2026 13:51:42 +0000
+Received: from bali.collaboradmins.com ([2a01:4f8:201:9162::2])
+	by bombadil.infradead.org with esmtps (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnD-0000000AZxP-12Cd;
+	Thu, 09 Apr 2026 13:51:37 +0000
 DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	s=mail; t=1775742692;
 	bh=Uf3oawvhkOYDFsuF3t/kHZrtN6yz3uwa92uWH3g5zZM=;
@@ -438,7 +237,8 @@ DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	 wGCto+Wtu4K+w==
 Received: from [192.168.0.15] (unknown [100.64.0.170])
 	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest SHA256)
+	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest
+ SHA256)
 	(No client certificate requested)
 	(Authenticated sender: detlev)
 	by bali.collaboradmins.com (Postfix) with ESMTPSA id 09A3017E1313;
@@ -447,27 +247,39 @@ From: Detlev Casanova <detlev.casanova@collabora.com>
 Date: Thu, 09 Apr 2026 09:50:37 -0400
 Subject: [PATCH 2/7] media: v4l2-mem2mem: Remove WARN_ON() in
  v4l2_m2m_job_finish()
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
 MIME-Version: 1.0
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: 7bit
 Message-Id: <20260409-rkvdec-multicore-v1-2-62b316abf0f7@collabora.com>
 References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
 In-Reply-To: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-To: Mauro Carvalho Chehab <mchehab@kernel.org>, 
- Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>, 
- Heiko Stuebner <heiko@sntech.de>, 
- Nicolas Dufresne <nicolas.dufresne@collabora.com>, 
+To: Mauro Carvalho Chehab <mchehab@kernel.org>,
+ Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
+ Heiko Stuebner <heiko@sntech.de>,
+ Nicolas Dufresne <nicolas.dufresne@collabora.com>,
  Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
- linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
- linux-arm-kernel@lists.infradead.org, 
+Cc: kernel@collabora.com, linux-media@vger.kernel.org,
+ linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org,
+ linux-arm-kernel@lists.infradead.org,
  Detlev Casanova <detlev.casanova@collabora.com>
 X-Mailer: b4 0.15.1
+X-CRM114-Version: 20100106-BlameMichelson ( TRE 0.8.0 (BSD) ) MR-646709E3 
+X-CRM114-CacheID: sfid-20260409_065135_947916_21C2161C 
+X-CRM114-Status: UNSURE (   8.71  )
+X-CRM114-Notice: Please train this message.
+X-BeenThere: linux-rockchip@lists.infradead.org
+X-Mailman-Version: 2.1.34
+Precedence: list
+List-Id: Upstream kernel work for Rockchip platforms
+ <linux-rockchip.lists.infradead.org>
+List-Unsubscribe: <http://lists.infradead.org/mailman/options/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=unsubscribe>
+List-Archive: <http://lists.infradead.org/pipermail/linux-rockchip/>
+List-Post: <mailto:linux-rockchip@lists.infradead.org>
+List-Help: <mailto:linux-rockchip-request@lists.infradead.org?subject=help>
+List-Subscribe: <http://lists.infradead.org/mailman/listinfo/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=subscribe>
+Sender: "Linux-rockchip" <linux-rockchip-bounces@lists.infradead.org>
+Errors-To: 
+ linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org
 
 This warning was added because there was no way, for drivers that support
 holding capture buffers to mark jobs done correctly without calling
@@ -501,126 +313,43 @@ index 7f9fad4f6807..27f7dd7974b5 100644
  	schedule_next = _v4l2_m2m_job_finish(m2m_dev, m2m_ctx);
  	spin_unlock_irqrestore(&m2m_dev->job_spinlock, flags);
 
--- 
-2.53.0
-
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
-	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
-	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 9690B3D6CC5;
-	Thu,  9 Apr 2026 13:51:41 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775742703; cv=none; b=bQnQdALNtMeyHR3MF6g5l28X8pUye/53N2gLOuBoVV5uW4uejn04pc7cKxUnan5m+09BIMnhKlCW+6d6m0OxyVEbeNaqQOPJHxB1If0u5gJDy6o66bTBDgrVevKarxBtQa9u7FLdG1tHsJUMCunPrMs8OGfk3PIBSPtx+CoOozs=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775742703; c=relaxed/simple;
-	bh=DMIweKgSOV3fIxZqhTvgTz9sRtOIz37xELaVKWgzSTk=;
-	h=From:Date:Subject:MIME-Version:Content-Type:Message-Id:References:
-	 In-Reply-To:To:Cc; b=V6r3ibzKJyFxJm7y67gyRiHhaJy5uRSdXIlSDk+PVS06nRVu8j23ABFEFeQA0VOb80aUFy8OQYMbo/l6imtajv4hG33boRzldVvqBP/UpYEfAqHaU8EI3WaTGuaxpse7h+jOF3zSgyDYCSx9QAbeevyCi3YpeaqgZwvAe+o/OiE=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=Ve14zFZ9; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="Ve14zFZ9"
-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
-	s=mail; t=1775742700;
-	bh=DMIweKgSOV3fIxZqhTvgTz9sRtOIz37xELaVKWgzSTk=;
-	h=From:Date:Subject:References:In-Reply-To:To:Cc:From;
-	b=Ve14zFZ9i+yeRKHWwgsEz5P+v66JA7tDwkhMXZ8Aalp5WOttwW2F5W0TQZZewlpoJ
-	 t/kLOh5SFVIq5WxxuSXqVbF6yXe6HQBr0OOJQeJyxtMMZj95KtJlJQhy7j3KjXm7DA
-	 sGOp9IFCYRPFY0fbpcko5kapedROjNDeC1OzcGP1l8i/XQd/3maQ1+ECYIJtoCeRwn
-	 YQ+y3EkW+q36PQcIVx7+/Q0fP4EIITjFc0n+ojtaREikctWPozUstChODtV5+ALBRy
-	 KpkGnHQet7Phb9FTqzaju4OmfzE89sRE22rA1fkEHR0ZRjMKAMUkYlhNmsc0YJUx/q
-	 3zgblwtSl+oJA==
-Received: from [192.168.0.15] (unknown [100.64.0.170])
-	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest SHA256)
-	(No client certificate requested)
-	(Authenticated sender: detlev)
-	by bali.collaboradmins.com (Postfix) with ESMTPSA id A9F4417E1380;
-	Thu,  9 Apr 2026 15:51:38 +0200 (CEST)
-From: Detlev Casanova <detlev.casanova@collabora.com>
-Date: Thu, 09 Apr 2026 09:50:41 -0400
-Subject: [PATCH 6/7] media: rkvdec: Wait for all buffers before
- stop_streaming
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
-MIME-Version: 1.0
+From patchwork Thu Apr  9 13:50:38 2026
 Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
 Content-Transfer-Encoding: 7bit
-Message-Id: <20260409-rkvdec-multicore-v1-6-62b316abf0f7@collabora.com>
-References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-In-Reply-To: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-To: Mauro Carvalho Chehab <mchehab@kernel.org>, 
- Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>, 
- Heiko Stuebner <heiko@sntech.de>, 
- Nicolas Dufresne <nicolas.dufresne@collabora.com>, 
- Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
- linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
- linux-arm-kernel@lists.infradead.org, 
- Detlev Casanova <detlev.casanova@collabora.com>
-X-Mailer: b4 0.15.1
-
-Because the jobs are marked as finished before the buffer are marked
-as done, the stop_streaming callback can be called while the decoder
-is still running.
-
-This could even go further and deallocate buffers that are still
-being used by the hardware.
-
-Fortunately, to avoid that, the vb2_wait_for_all_buffers() function
-can be used at the beginning of the stop_streaming callback to make sure
-that cleanup functions are called after the last buffer has been returned
-to the queue.
-
-Signed-off-by: Detlev Casanova <detlev.casanova@collabora.com>
----
- drivers/media/platform/rockchip/rkvdec/rkvdec.c | 2 ++
- 1 file changed, 2 insertions(+)
-
-diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.c b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-index 5667d625f016..c2818f1575ef 100644
---- a/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-+++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-@@ -1027,6 +1027,8 @@ static void rkvdec_stop_streaming(struct vb2_queue *q)
- 
- 		if (desc->ops->stop)
- 			desc->ops->stop(ctx);
-+
-+		vb2_wait_for_all_buffers(q);
- 	}
- 
- 	rkvdec_queue_cleanup(q, VB2_BUF_STATE_ERROR);
-
--- 
-2.53.0
-
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
+X-Patchwork-Submitter: Detlev Casanova <detlev.casanova@collabora.com>
+X-Patchwork-Id: 14517748
+Return-Path: 
+ <linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from bombadil.infradead.org (bombadil.infradead.org
+ [198.137.202.133])
 	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
 	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 36C663D6487;
-	Thu,  9 Apr 2026 13:51:41 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775742705; cv=none; b=CsTq6DMqg6S/rvEBvlGPXNtW2+EDE8KuTjOyhr1vkUCa4FMMtk6ZrqWjcobHxcb0LK3WCsOH28i95kAM8cNmB06syfcXQuvuIyu65SNx9MVBpmrSVhyfwyAVlISCAQ2fXac3qHa/rWhKM4+W2FBGDgMrMmjpSs5OkR5qYenPx6Y=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775742705; c=relaxed/simple;
-	bh=RSXqqXBeCA6gtCqM9bPU3XduJDdYCviviiS0NH06u4c=;
-	h=From:Date:Subject:MIME-Version:Content-Type:Message-Id:References:
-	 In-Reply-To:To:Cc; b=DGXGxlm1c/TDLulmq4l1dMCf4aYXFkuYAOO/NqdRll2btP2vW6Iln4ienHgiW1sNXXnvnWkF1yjxipqkPWjQcbNT9jyuXzm4m/K3Umk0u4v0LbeYImN8wzHocS6BaGLoTRSlgpNwGyLhx5rIrDWF8Z82oEU4qbYs75TPV3KEm70=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=PlDuXPYh; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="PlDuXPYh"
+	by smtp.lore.kernel.org (Postfix) with ESMTPS id 1FEB3EA3C59
+	for <linux-rockchip@archiver.kernel.org>;
+ Thu,  9 Apr 2026 13:52:01 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/relaxed;
+	d=lists.infradead.org; s=bombadil.20210309; h=Sender:
+	Content-Transfer-Encoding:Content-Type:List-Subscribe:List-Help:List-Post:
+	List-Archive:List-Unsubscribe:List-Id:Cc:To:In-Reply-To:References:Message-Id
+	:MIME-Version:Subject:Date:From:Reply-To:Content-ID:Content-Description:
+	Resent-Date:Resent-From:Resent-Sender:Resent-To:Resent-Cc:Resent-Message-ID:
+	List-Owner; bh=oz4f1kQ5C1Swq1XyuyXYXtiF783FCWiuuARrKEXRm18=; b=F1Mub6fa6HYvku
+	4QVknaxXK8HjYHMYlCpAaAiSHOG/1HEVPV548hLxJCl0R7QpRVXEl9DikM3BNJsV7XxDdriiFNYYY
+	5g7uRDb6WjUzIjuP/jcW/4LdOiPV/E2DdVhZSJzrDP7Te7EPDN2yIfycpd6XP4krdnOpLX6V1ZS6c
+	dNOqvsj2HPCKTfXzOb8sJSqjt5Qr9shIMIoxLgPXQC0IB+6W3Irm/Vjhf5E8UNcRWEit85CjLCRzp
+	Xcsnk2Smob6gT3sx/d5y4FztF5YbnM3C64qXvCV7UUahWoErv34ph+zxF/Wgknz7WNxn48cVJe2pA
+	JFDVaPlccZVBdW9ykdwg==;
+Received: from localhost ([::1] helo=bombadil.infradead.org)
+	by bombadil.infradead.org with esmtp (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnK-0000000Aa32-45gy;
+	Thu, 09 Apr 2026 13:51:43 +0000
+Received: from bali.collaboradmins.com ([148.251.105.195])
+	by bombadil.infradead.org with esmtps (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnE-0000000AZxv-1pfN;
+	Thu, 09 Apr 2026 13:51:38 +0000
 DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	s=mail; t=1775742694;
 	bh=RSXqqXBeCA6gtCqM9bPU3XduJDdYCviviiS0NH06u4c=;
@@ -633,7 +362,8 @@ DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	 HPohmFozY/C7Q==
 Received: from [192.168.0.15] (unknown [100.64.0.170])
 	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest SHA256)
+	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest
+ SHA256)
 	(No client certificate requested)
 	(Authenticated sender: detlev)
 	by bali.collaboradmins.com (Postfix) with ESMTPSA id D273817E1330;
@@ -641,27 +371,38 @@ Received: from [192.168.0.15] (unknown [100.64.0.170])
 From: Detlev Casanova <detlev.casanova@collabora.com>
 Date: Thu, 09 Apr 2026 09:50:38 -0400
 Subject: [PATCH 3/7] media: rkvdec: Keep RCB to the correct size
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
 MIME-Version: 1.0
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: 7bit
 Message-Id: <20260409-rkvdec-multicore-v1-3-62b316abf0f7@collabora.com>
 References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
 In-Reply-To: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-To: Mauro Carvalho Chehab <mchehab@kernel.org>, 
- Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>, 
- Heiko Stuebner <heiko@sntech.de>, 
- Nicolas Dufresne <nicolas.dufresne@collabora.com>, 
+To: Mauro Carvalho Chehab <mchehab@kernel.org>,
+ Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
+ Heiko Stuebner <heiko@sntech.de>,
+ Nicolas Dufresne <nicolas.dufresne@collabora.com>,
  Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
- linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
- linux-arm-kernel@lists.infradead.org, 
+Cc: kernel@collabora.com, linux-media@vger.kernel.org,
+ linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org,
+ linux-arm-kernel@lists.infradead.org,
  Detlev Casanova <detlev.casanova@collabora.com>
 X-Mailer: b4 0.15.1
+X-CRM114-Version: 20100106-BlameMichelson ( TRE 0.8.0 (BSD) ) MR-646709E3 
+X-CRM114-CacheID: sfid-20260409_065136_622741_8FB7E8ED 
+X-CRM114-Status: GOOD (  16.83  )
+X-BeenThere: linux-rockchip@lists.infradead.org
+X-Mailman-Version: 2.1.34
+Precedence: list
+List-Id: Upstream kernel work for Rockchip platforms
+ <linux-rockchip.lists.infradead.org>
+List-Unsubscribe: <http://lists.infradead.org/mailman/options/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=unsubscribe>
+List-Archive: <http://lists.infradead.org/pipermail/linux-rockchip/>
+List-Post: <mailto:linux-rockchip@lists.infradead.org>
+List-Help: <mailto:linux-rockchip-request@lists.infradead.org?subject=help>
+List-Subscribe: <http://lists.infradead.org/mailman/listinfo/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=subscribe>
+Sender: "Linux-rockchip" <linux-rockchip-bounces@lists.infradead.org>
+Errors-To: 
+ linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org
 
 Currently, if a video changes resolution, the RCB size might be too small
 and the HW could try to write out of the allocated buffer.
@@ -816,29 +557,186 @@ index 1d1e9bfef8e9..31ddfcc58894 100644
  	if (ret)
  		rkvdec_job_finish(ctx, VB2_BUF_STATE_ERROR);
 
--- 
-2.53.0
-
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
+From patchwork Thu Apr  9 13:50:39 2026
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+X-Patchwork-Submitter: Detlev Casanova <detlev.casanova@collabora.com>
+X-Patchwork-Id: 14517749
+Return-Path: 
+ <linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from bombadil.infradead.org (bombadil.infradead.org
+ [198.137.202.133])
 	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
 	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 36BA73B9DA8;
-	Thu,  9 Apr 2026 13:51:40 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775742707; cv=none; b=Ie5aMF4Al3UzUp/RQp8zrvJicJl149ALpQYYzAbbbwVCIuyOJUbcdlhukipVraolWQVm73vaOU5YBWCHIIMdvuFeYTkW/xzfmwsMkW4zhw1+QrIYf7aYL+B3MIPjwFReIOkMp5H5VDWqQnFS1kW69+MvoNk8hE92oNkANyYPZdg=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775742707; c=relaxed/simple;
-	bh=Liu/oRggu1n9YjyIDxPUgj+IUuHY6Obi1pOPsEJ6gq4=;
-	h=From:Date:Subject:MIME-Version:Content-Type:Message-Id:References:
-	 In-Reply-To:To:Cc; b=BytCbAGEDJOUVI9wNdCyH5WmFKLwKn2OXtPDznc5Moff/q2vW6YJ5GbBHaJQPo/skatF8jHiCmgiokMx+KBt6NuvLFb0mUJb4j+j5Ck0YOaARGEKvX1QkjzU4Xjb1YEopr51C16hKPSSdb3HvRIra3WO2oq1vdV4iSj4P96ubx0=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=PqDDXwpf; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="PqDDXwpf"
+	by smtp.lore.kernel.org (Postfix) with ESMTPS id 2B5CFEA3C59
+	for <linux-rockchip@archiver.kernel.org>;
+ Thu,  9 Apr 2026 13:52:09 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/relaxed;
+	d=lists.infradead.org; s=bombadil.20210309; h=Sender:
+	Content-Transfer-Encoding:Content-Type:List-Subscribe:List-Help:List-Post:
+	List-Archive:List-Unsubscribe:List-Id:Cc:To:In-Reply-To:References:Message-Id
+	:MIME-Version:Subject:Date:From:Reply-To:Content-ID:Content-Description:
+	Resent-Date:Resent-From:Resent-Sender:Resent-To:Resent-Cc:Resent-Message-ID:
+	List-Owner; bh=r7HHj7WFhEB5ZsIbBgt743Y0jPThP5B6cIfpGIAGKJk=; b=CLa3M23af93p55
+	zT4IWsacbNh04+awdB2GVp8jKxdpvrQOrPXY/00WHo9GYZYKx0AqFPJTdepqc90TNmtXX+t5I2hPQ
+	cNlU5y2jEKywzxLeY+XwfykCvyGNDrTtxTvww6/BSl3OS+TjsVef3tNhJFRm0Cildl33Id/9CMaA+
+	W5Y+o5/nlIhmIs9mCJSYGH+9tukytalSWxiJ8r51GBKJprxvQWGb55839PTQGa95/7JKcfi0M8oHi
+	aI2nhq/eu8Wy0+jrvHmQd71+eLwMVwuPDyt5cjeFhRDbZD6Lrkz7GkS8oybYkVw3FMkLlBOuZ8IRh
+	edDhejCMd/FT0h6geAkQ==;
+Received: from localhost ([::1] helo=bombadil.infradead.org)
+	by bombadil.infradead.org with esmtp (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnc-0000000AaCX-3mUg;
+	Thu, 09 Apr 2026 13:52:00 +0000
+Received: from bali.collaboradmins.com ([2a01:4f8:201:9162::2])
+	by bombadil.infradead.org with esmtps (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnH-0000000AZyb-0TP5;
+	Thu, 09 Apr 2026 13:51:40 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
+	s=mail; t=1775742696;
+	bh=KyzQwUnfDm1fztBC6M2uhc6YYJnSNz50uKom2fCwuZQ=;
+	h=From:Date:Subject:References:In-Reply-To:To:Cc:From;
+	b=l4XS61sDtun10RvRrmAQdt2YKZsc3mBoeRg457cBWGGTuDs9yhOa93DjK/eKkcis/
+	 I2jBM8k7jCXzYrakt2XSG/SUk+l3jYS0EN9pPNVJb45KOl9scpyPpxGFWTIw7QC0gQ
+	 jOjaQDiSsKbnF1N7LAFSnfWJZ3zee3/v9sIi+a4DHcQ+Vmm1dq8Q82wEr7pUTLkUj6
+	 LykLGfPf9suuSmY/syNld4fwOqDt+pJ6tlgud/jlwlMDKpO/Bj1hzOY7/BOvP58UIW
+	 +3bNDUZyohkpOSW3EJvvvn70SBDrd6CIwaJga2/V6QSTkv3EST0WAPHSTi6mCuUwOg
+	 Pu3/rB7H6f5DQ==
+Received: from [192.168.0.15] (unknown [100.64.0.170])
+	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
+	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest
+ SHA256)
+	(No client certificate requested)
+	(Authenticated sender: detlev)
+	by bali.collaboradmins.com (Postfix) with ESMTPSA id AAE7917E1340;
+	Thu,  9 Apr 2026 15:51:34 +0200 (CEST)
+From: Detlev Casanova <detlev.casanova@collabora.com>
+Date: Thu, 09 Apr 2026 09:50:39 -0400
+Subject: [PATCH 4/7] media: rkvdec: Remove unused need_reset
+MIME-Version: 1.0
+Message-Id: <20260409-rkvdec-multicore-v1-4-62b316abf0f7@collabora.com>
+References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
+In-Reply-To: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
+To: Mauro Carvalho Chehab <mchehab@kernel.org>,
+ Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
+ Heiko Stuebner <heiko@sntech.de>,
+ Nicolas Dufresne <nicolas.dufresne@collabora.com>,
+ Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
+Cc: kernel@collabora.com, linux-media@vger.kernel.org,
+ linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org,
+ linux-arm-kernel@lists.infradead.org,
+ Detlev Casanova <detlev.casanova@collabora.com>
+X-Mailer: b4 0.15.1
+X-CRM114-Version: 20100106-BlameMichelson ( TRE 0.8.0 (BSD) ) MR-646709E3 
+X-CRM114-CacheID: sfid-20260409_065139_324661_32FCBA92 
+X-CRM114-Status: GOOD (  10.52  )
+X-BeenThere: linux-rockchip@lists.infradead.org
+X-Mailman-Version: 2.1.34
+Precedence: list
+List-Id: Upstream kernel work for Rockchip platforms
+ <linux-rockchip.lists.infradead.org>
+List-Unsubscribe: <http://lists.infradead.org/mailman/options/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=unsubscribe>
+List-Archive: <http://lists.infradead.org/pipermail/linux-rockchip/>
+List-Post: <mailto:linux-rockchip@lists.infradead.org>
+List-Help: <mailto:linux-rockchip-request@lists.infradead.org?subject=help>
+List-Subscribe: <http://lists.infradead.org/mailman/listinfo/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=subscribe>
+Sender: "Linux-rockchip" <linux-rockchip-bounces@lists.infradead.org>
+Errors-To: 
+ linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org
+
+A left-over from the iommu restore mecanism was forgotten.
+As need_reset is never set to true, the if has no use.
+
+The actual restore function is called above it vase the IRQ isn't in a
+success status.
+
+Signed-off-by: Detlev Casanova <detlev.casanova@collabora.com>
+---
+ drivers/media/platform/rockchip/rkvdec/rkvdec.c | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.c b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
+index 31ddfcc58894..db2731af06cf 100644
+--- a/drivers/media/platform/rockchip/rkvdec/rkvdec.c
++++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
+@@ -1462,7 +1462,6 @@ static irqreturn_t vdpu381_irq_handler(struct rkvdec_ctx *ctx)
+ {
+ 	struct rkvdec_dev *rkvdec = ctx->dev;
+ 	enum vb2_buffer_state state;
+-	bool need_reset = 0;
+ 	u32 status;
+ 
+ 	status = readl(rkvdec->regs + VDPU381_REG_STA_INT);
+@@ -1478,9 +1477,6 @@ static irqreturn_t vdpu381_irq_handler(struct rkvdec_ctx *ctx)
+ 			rkvdec_iommu_restore(rkvdec);
+ 	}
+ 
+-	if (need_reset)
+-		rkvdec_iommu_restore(rkvdec);
+-
+ 	if (cancel_delayed_work(&rkvdec->watchdog_work))
+ 		rkvdec_job_finish(ctx, state);
+ 
+@@ -1491,7 +1487,6 @@ static irqreturn_t vdpu383_irq_handler(struct rkvdec_ctx *ctx)
+ {
+ 	struct rkvdec_dev *rkvdec = ctx->dev;
+ 	enum vb2_buffer_state state;
+-	bool need_reset = 0;
+ 	u32 status;
+ 
+ 	status = readl(rkvdec->link + VDPU383_LINK_STA_INT);
+@@ -1507,9 +1502,6 @@ static irqreturn_t vdpu383_irq_handler(struct rkvdec_ctx *ctx)
+ 		rkvdec_iommu_restore(rkvdec);
+ 	}
+ 
+-	if (need_reset)
+-		rkvdec_iommu_restore(rkvdec);
+-
+ 	if (cancel_delayed_work(&rkvdec->watchdog_work))
+ 		rkvdec_job_finish(ctx, state);
+ 
+
+From patchwork Thu Apr  9 13:50:40 2026
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+X-Patchwork-Submitter: Detlev Casanova <detlev.casanova@collabora.com>
+X-Patchwork-Id: 14517752
+Return-Path: 
+ <linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from bombadil.infradead.org (bombadil.infradead.org
+ [198.137.202.133])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by smtp.lore.kernel.org (Postfix) with ESMTPS id A771BEA3C59
+	for <linux-rockchip@archiver.kernel.org>;
+ Thu,  9 Apr 2026 13:53:25 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/relaxed;
+	d=lists.infradead.org; s=bombadil.20210309; h=Sender:
+	Content-Transfer-Encoding:Content-Type:List-Subscribe:List-Help:List-Post:
+	List-Archive:List-Unsubscribe:List-Id:Cc:To:In-Reply-To:References:Message-Id
+	:MIME-Version:Subject:Date:From:Reply-To:Content-ID:Content-Description:
+	Resent-Date:Resent-From:Resent-Sender:Resent-To:Resent-Cc:Resent-Message-ID:
+	List-Owner; bh=Oacu6QX80RzU/5d+hH6uE+DE6lthuaUK7jWb/YXwl0U=; b=NLg4sGeWgbqkFi
+	s69K+10CgM364+Bt8YqmH6eDyF7umYzvtwjNiaCsA3M8i+Z0cKZdXZgQ+2+x89oVLnqsVdlGDNIXa
+	TTvj7uK35J1j4jJHi3kCrL4VPISg4+H6j519r65RKvnzH31mHNrKP3siCjvW9SFk3YiLIdQEqd9k9
+	Jzf2QP7P0o7sV/F+h8G7vV1FWPvctNRZP3KQGCMjwmbBmG+zo5HsBwCmz39Il+qSxG7xfLiWfdGQo
+	+Ef0f9of5LfAbrNDHc5FeAVz+6bVdx29T/CJya03NsPt4WrsmZjcrS/NrKJnARLQGzPTZlV3lXCzE
+	3tTJxwCylaKtbrTxH/SQ==;
+Received: from localhost ([::1] helo=bombadil.infradead.org)
+	by bombadil.infradead.org with esmtp (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApom-0000000Aahl-0N9q;
+	Thu, 09 Apr 2026 13:53:12 +0000
+Received: from bali.collaboradmins.com ([2a01:4f8:201:9162::2])
+	by bombadil.infradead.org with esmtps (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnJ-0000000AZzi-1cXh;
+	Thu, 09 Apr 2026 13:52:00 +0000
 DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	s=mail; t=1775742698;
 	bh=Liu/oRggu1n9YjyIDxPUgj+IUuHY6Obi1pOPsEJ6gq4=;
@@ -851,7 +749,8 @@ DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	 9a218DwYCJXug==
 Received: from [192.168.0.15] (unknown [100.64.0.170])
 	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest SHA256)
+	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest
+ SHA256)
 	(No client certificate requested)
 	(Authenticated sender: detlev)
 	by bali.collaboradmins.com (Postfix) with ESMTPSA id 7E70817E12B9;
@@ -859,27 +758,38 @@ Received: from [192.168.0.15] (unknown [100.64.0.170])
 From: Detlev Casanova <detlev.casanova@collabora.com>
 Date: Thu, 09 Apr 2026 09:50:40 -0400
 Subject: [PATCH 5/7] media: rkvdec: Add multicore support
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
 MIME-Version: 1.0
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: 7bit
 Message-Id: <20260409-rkvdec-multicore-v1-5-62b316abf0f7@collabora.com>
 References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
 In-Reply-To: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-To: Mauro Carvalho Chehab <mchehab@kernel.org>, 
- Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>, 
- Heiko Stuebner <heiko@sntech.de>, 
- Nicolas Dufresne <nicolas.dufresne@collabora.com>, 
+To: Mauro Carvalho Chehab <mchehab@kernel.org>,
+ Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
+ Heiko Stuebner <heiko@sntech.de>,
+ Nicolas Dufresne <nicolas.dufresne@collabora.com>,
  Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
- linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
- linux-arm-kernel@lists.infradead.org, 
+Cc: kernel@collabora.com, linux-media@vger.kernel.org,
+ linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org,
+ linux-arm-kernel@lists.infradead.org,
  Detlev Casanova <detlev.casanova@collabora.com>
 X-Mailer: b4 0.15.1
+X-CRM114-Version: 20100106-BlameMichelson ( TRE 0.8.0 (BSD) ) MR-646709E3 
+X-CRM114-CacheID: sfid-20260409_065141_982451_9A98A583 
+X-CRM114-Status: GOOD (  24.44  )
+X-BeenThere: linux-rockchip@lists.infradead.org
+X-Mailman-Version: 2.1.34
+Precedence: list
+List-Id: Upstream kernel work for Rockchip platforms
+ <linux-rockchip.lists.infradead.org>
+List-Unsubscribe: <http://lists.infradead.org/mailman/options/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=unsubscribe>
+List-Archive: <http://lists.infradead.org/pipermail/linux-rockchip/>
+List-Post: <mailto:linux-rockchip@lists.infradead.org>
+List-Help: <mailto:linux-rockchip-request@lists.infradead.org?subject=help>
+List-Subscribe: <http://lists.infradead.org/mailman/listinfo/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=subscribe>
+Sender: "Linux-rockchip" <linux-rockchip-bounces@lists.infradead.org>
+Errors-To: 
+ linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org
 
 Rockchip SoCs like the RK3588 have multiple independent decoder cores
 They are defined in the device tree as separate DT nodes sharing the same
@@ -2471,29 +2381,166 @@ index a24be6638b6b..4f042a367dc0 100644
  void rkvdec_quirks_disable_qos(struct rkvdec_ctx *ctx);
  
 
--- 
-2.53.0
-
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
+From patchwork Thu Apr  9 13:50:41 2026
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+X-Patchwork-Submitter: Detlev Casanova <detlev.casanova@collabora.com>
+X-Patchwork-Id: 14517750
+Return-Path: 
+ <linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from bombadil.infradead.org (bombadil.infradead.org
+ [198.137.202.133])
 	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
 	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 19A8136494C;
-	Thu,  9 Apr 2026 13:51:44 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775742709; cv=none; b=nRna39a1qJjmOmuf+72AchyC7rfxS9MWEF/f3nqphAIqdIm16u7e4J2p55v9DxAHmR3F9+Ov+QypyEE3mCdyG7dHw7sL3uoiFgOpNg4lHv39VJUlRdDsLBEfhatwu/H97E4kbmXtSnA/q6wffTDCd103xQaisyfdFDTC8nXtm8g=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775742709; c=relaxed/simple;
-	bh=MF7T/Jpkt7WSkcB4j1vMJJa1MuRvCoF8Hv7YRWQJ6sY=;
-	h=From:Date:Subject:MIME-Version:Content-Type:Message-Id:References:
-	 In-Reply-To:To:Cc; b=cKCT13/Gx+OQP8/zBUjlho4XAWAjG/yIdJebaxTlsl6vO8IVygyFiOZVepe3dqQctJaVVyIRYLY4hBOD/qQQBvg6T1aVo+9fS/4GZPzRTe4Vu6zO1d+MXOJXKwjyIUCLV5tlkBNhrGO4rHt8WORbn4kXZmUBd14kMNjekWM4TQ8=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=AkAW4qi0; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="AkAW4qi0"
+	by smtp.lore.kernel.org (Postfix) with ESMTPS id BF9EFEA3C59
+	for <linux-rockchip@archiver.kernel.org>;
+ Thu,  9 Apr 2026 13:53:10 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/relaxed;
+	d=lists.infradead.org; s=bombadil.20210309; h=Sender:
+	Content-Transfer-Encoding:Content-Type:List-Subscribe:List-Help:List-Post:
+	List-Archive:List-Unsubscribe:List-Id:Cc:To:In-Reply-To:References:Message-Id
+	:MIME-Version:Subject:Date:From:Reply-To:Content-ID:Content-Description:
+	Resent-Date:Resent-From:Resent-Sender:Resent-To:Resent-Cc:Resent-Message-ID:
+	List-Owner; bh=S/Sa7Tk/F0YkkNsGJwu5ON1OHqhytm+bCE+8cW0ceec=; b=jXLYlJ54VW7OX0
+	47ASCGtS0PSVg7FeNQZR/wjDZJ2FcZ3O2nXUT+h9Aev6Jmfbx6nPtexc13F3Npy7VNfWOTCirkLfL
+	c5T4vkAuPbe/+lQWh/rD4X4mxiYNYe3kzeJmpsPosgkoTvWBkB0fWyJyJfZDWv/Le0d70mrq90ZIO
+	7BSfPkr1OO2XjCTEhP05JhNA3n2VcUFVmGYLqeQRByfHHns/NtMXEZl5Wm99RxzANIml3JM2KYHpv
+	flN2f/g7/+DbQrX3vj1n6JqXJnUU7S1Jq7pzZ5y7eZ+l7JsHu018KEyzuO+G2MWMNUbnf/TPrNiY7
+	rO+qz8/1M8BGfWix4bNg==;
+Received: from localhost ([::1] helo=bombadil.infradead.org)
+	by bombadil.infradead.org with esmtp (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApoK-0000000AaWj-0Zqs;
+	Thu, 09 Apr 2026 13:52:44 +0000
+Received: from bali.collaboradmins.com ([2a01:4f8:201:9162::2])
+	by bombadil.infradead.org with esmtps (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnL-0000000Aa0j-06UZ;
+	Thu, 09 Apr 2026 13:51:54 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
+	s=mail; t=1775742700;
+	bh=DMIweKgSOV3fIxZqhTvgTz9sRtOIz37xELaVKWgzSTk=;
+	h=From:Date:Subject:References:In-Reply-To:To:Cc:From;
+	b=Ve14zFZ9i+yeRKHWwgsEz5P+v66JA7tDwkhMXZ8Aalp5WOttwW2F5W0TQZZewlpoJ
+	 t/kLOh5SFVIq5WxxuSXqVbF6yXe6HQBr0OOJQeJyxtMMZj95KtJlJQhy7j3KjXm7DA
+	 sGOp9IFCYRPFY0fbpcko5kapedROjNDeC1OzcGP1l8i/XQd/3maQ1+ECYIJtoCeRwn
+	 YQ+y3EkW+q36PQcIVx7+/Q0fP4EIITjFc0n+ojtaREikctWPozUstChODtV5+ALBRy
+	 KpkGnHQet7Phb9FTqzaju4OmfzE89sRE22rA1fkEHR0ZRjMKAMUkYlhNmsc0YJUx/q
+	 3zgblwtSl+oJA==
+Received: from [192.168.0.15] (unknown [100.64.0.170])
+	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
+	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest
+ SHA256)
+	(No client certificate requested)
+	(Authenticated sender: detlev)
+	by bali.collaboradmins.com (Postfix) with ESMTPSA id A9F4417E1380;
+	Thu,  9 Apr 2026 15:51:38 +0200 (CEST)
+From: Detlev Casanova <detlev.casanova@collabora.com>
+Date: Thu, 09 Apr 2026 09:50:41 -0400
+Subject: [PATCH 6/7] media: rkvdec: Wait for all buffers before
+ stop_streaming
+MIME-Version: 1.0
+Message-Id: <20260409-rkvdec-multicore-v1-6-62b316abf0f7@collabora.com>
+References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
+In-Reply-To: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
+To: Mauro Carvalho Chehab <mchehab@kernel.org>,
+ Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
+ Heiko Stuebner <heiko@sntech.de>,
+ Nicolas Dufresne <nicolas.dufresne@collabora.com>,
+ Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
+Cc: kernel@collabora.com, linux-media@vger.kernel.org,
+ linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org,
+ linux-arm-kernel@lists.infradead.org,
+ Detlev Casanova <detlev.casanova@collabora.com>
+X-Mailer: b4 0.15.1
+X-CRM114-Version: 20100106-BlameMichelson ( TRE 0.8.0 (BSD) ) MR-646709E3 
+X-CRM114-CacheID: sfid-20260409_065143_638698_C5F8C85B 
+X-CRM114-Status: GOOD (  10.96  )
+X-BeenThere: linux-rockchip@lists.infradead.org
+X-Mailman-Version: 2.1.34
+Precedence: list
+List-Id: Upstream kernel work for Rockchip platforms
+ <linux-rockchip.lists.infradead.org>
+List-Unsubscribe: <http://lists.infradead.org/mailman/options/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=unsubscribe>
+List-Archive: <http://lists.infradead.org/pipermail/linux-rockchip/>
+List-Post: <mailto:linux-rockchip@lists.infradead.org>
+List-Help: <mailto:linux-rockchip-request@lists.infradead.org?subject=help>
+List-Subscribe: <http://lists.infradead.org/mailman/listinfo/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=subscribe>
+Sender: "Linux-rockchip" <linux-rockchip-bounces@lists.infradead.org>
+Errors-To: 
+ linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org
+
+Because the jobs are marked as finished before the buffer are marked
+as done, the stop_streaming callback can be called while the decoder
+is still running.
+
+This could even go further and deallocate buffers that are still
+being used by the hardware.
+
+Fortunately, to avoid that, the vb2_wait_for_all_buffers() function
+can be used at the beginning of the stop_streaming callback to make sure
+that cleanup functions are called after the last buffer has been returned
+to the queue.
+
+Signed-off-by: Detlev Casanova <detlev.casanova@collabora.com>
+---
+ drivers/media/platform/rockchip/rkvdec/rkvdec.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.c b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
+index 5667d625f016..c2818f1575ef 100644
+--- a/drivers/media/platform/rockchip/rkvdec/rkvdec.c
++++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
+@@ -1027,6 +1027,8 @@ static void rkvdec_stop_streaming(struct vb2_queue *q)
+ 
+ 		if (desc->ops->stop)
+ 			desc->ops->stop(ctx);
++
++		vb2_wait_for_all_buffers(q);
+ 	}
+ 
+ 	rkvdec_queue_cleanup(q, VB2_BUF_STATE_ERROR);
+
+From patchwork Thu Apr  9 13:50:42 2026
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+X-Patchwork-Submitter: Detlev Casanova <detlev.casanova@collabora.com>
+X-Patchwork-Id: 14517751
+Return-Path: 
+ <linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from bombadil.infradead.org (bombadil.infradead.org
+ [198.137.202.133])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by smtp.lore.kernel.org (Postfix) with ESMTPS id BE0C2EA3C5F
+	for <linux-rockchip@archiver.kernel.org>;
+ Thu,  9 Apr 2026 13:53:25 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/relaxed;
+	d=lists.infradead.org; s=bombadil.20210309; h=Sender:
+	Content-Transfer-Encoding:Content-Type:List-Subscribe:List-Help:List-Post:
+	List-Archive:List-Unsubscribe:List-Id:Cc:To:In-Reply-To:References:Message-Id
+	:MIME-Version:Subject:Date:From:Reply-To:Content-ID:Content-Description:
+	Resent-Date:Resent-From:Resent-Sender:Resent-To:Resent-Cc:Resent-Message-ID:
+	List-Owner; bh=h3bLePycNoFegpSOeZ7ic/Mf8FH9yDhirai7qIVduQs=; b=tZF0TYnNPSugZN
+	g4i0KTMVFXGP3bDiTCocTkKbj3cjmTCo+RKdB/AEbakU99RaPJKX02ZE/9UUnRj7lWL8eZKHYhgAR
+	T5EIFmWlAj4Gz3cQ73QhyNJCdJufLiuI/FRo8CUI023q0G+7Gp3KYCzDpC6C/KTxcPCdx9v/nrVQl
+	v4LIyw6prdVujw2kbi0Z96liLMDjcL8994UDNPmmNd6QpFmlIRoR0WRu6tIzr6TiWy54PVRKi3C3a
+	IgEDr/NrIQB0vIu0WHXWn3/joWoLuirUJ4CfOf5khSVPLkoB0+/cMYh5AhjLuMEz1qP64s+4bw0uY
+	Vu1TA+toathFAv3uOzdQ==;
+Received: from localhost ([::1] helo=bombadil.infradead.org)
+	by bombadil.infradead.org with esmtp (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApom-0000000AaiN-2hMZ;
+	Thu, 09 Apr 2026 13:53:12 +0000
+Received: from bali.collaboradmins.com ([2a01:4f8:201:9162::2])
+	by bombadil.infradead.org with esmtps (Exim 4.98.2 #2 (Red Hat Linux))
+	id 1wApnN-0000000Aa4J-3WFB;
+	Thu, 09 Apr 2026 13:52:01 +0000
 DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	s=mail; t=1775742702;
 	bh=MF7T/Jpkt7WSkcB4j1vMJJa1MuRvCoF8Hv7YRWQJ6sY=;
@@ -2506,7 +2553,8 @@ DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
 	 4j9QcoaBhX//Q==
 Received: from [192.168.0.15] (unknown [100.64.0.170])
 	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest SHA256)
+	 key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest
+ SHA256)
 	(No client certificate requested)
 	(Authenticated sender: detlev)
 	by bali.collaboradmins.com (Postfix) with ESMTPSA id 7A5FD17E138B;
@@ -2514,27 +2562,38 @@ Received: from [192.168.0.15] (unknown [100.64.0.170])
 From: Detlev Casanova <detlev.casanova@collabora.com>
 Date: Thu, 09 Apr 2026 09:50:42 -0400
 Subject: [PATCH 7/7] media: rkvdec: Add multicore IOMMU support
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
 MIME-Version: 1.0
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: 7bit
 Message-Id: <20260409-rkvdec-multicore-v1-7-62b316abf0f7@collabora.com>
 References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
 In-Reply-To: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-To: Mauro Carvalho Chehab <mchehab@kernel.org>, 
- Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>, 
- Heiko Stuebner <heiko@sntech.de>, 
- Nicolas Dufresne <nicolas.dufresne@collabora.com>, 
+To: Mauro Carvalho Chehab <mchehab@kernel.org>,
+ Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
+ Heiko Stuebner <heiko@sntech.de>,
+ Nicolas Dufresne <nicolas.dufresne@collabora.com>,
  Hans Verkuil <hverkuil+cisco@kernel.org>, Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
- linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
- linux-arm-kernel@lists.infradead.org, 
+Cc: kernel@collabora.com, linux-media@vger.kernel.org,
+ linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org,
+ linux-arm-kernel@lists.infradead.org,
  Detlev Casanova <detlev.casanova@collabora.com>
 X-Mailer: b4 0.15.1
+X-CRM114-Version: 20100106-BlameMichelson ( TRE 0.8.0 (BSD) ) MR-646709E3 
+X-CRM114-CacheID: sfid-20260409_065158_705779_8C0C0B92 
+X-CRM114-Status: GOOD (  24.04  )
+X-BeenThere: linux-rockchip@lists.infradead.org
+X-Mailman-Version: 2.1.34
+Precedence: list
+List-Id: Upstream kernel work for Rockchip platforms
+ <linux-rockchip.lists.infradead.org>
+List-Unsubscribe: <http://lists.infradead.org/mailman/options/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=unsubscribe>
+List-Archive: <http://lists.infradead.org/pipermail/linux-rockchip/>
+List-Post: <mailto:linux-rockchip@lists.infradead.org>
+List-Help: <mailto:linux-rockchip-request@lists.infradead.org?subject=help>
+List-Subscribe: <http://lists.infradead.org/mailman/listinfo/linux-rockchip>,
+ <mailto:linux-rockchip-request@lists.infradead.org?subject=subscribe>
+Sender: "Linux-rockchip" <linux-rockchip-bounces@lists.infradead.org>
+Errors-To: 
+ linux-rockchip-bounces+linux-rockchip=archiver.kernel.org@lists.infradead.org
 
 As each core has its own IOMMU core, buffers must be mapped in each
 core's IOMMU so that any run() call can use any core without having to
@@ -2785,1152 +2844,3 @@ index 4f042a367dc0..ccd766b220c7 100644
  };
  
  struct rkvdec_ctx {
-
--- 
-2.53.0
-
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
-	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
-	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 329C437D137;
-	Thu,  9 Apr 2026 14:19:14 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775744357; cv=none; b=JY/GMIRgumUBQvjB49/ERZgxZfWbjiF5O08tAH7DXm0HjCTYeao3ZmPMeOu2dADfDocPiNMXUKOeYEwNL180aDM+duWv8OddTg1ZbrMTwjwtI0h3ezuPibwjXNW4X60XZL759mUk8lEOl4tQhPezBYPbmsmyCfK/etSs1xDvbOU=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775744357; c=relaxed/simple;
-	bh=V3M5/+eiv7Jh1DsCad4yjgGbVosE62VvCDePOQgvn2Q=;
-	h=Message-ID:Subject:From:To:Cc:Date:In-Reply-To:References:
-	 Content-Type:MIME-Version; b=PLnoXdl912lwaYPOlIZTljnSBFASLmpnBFQlaghxy1sKyexD124rWWG37eNahj0odpgNMVR/4DKiTWJaBFW3EH3aSJN3+Hfj+27psBomBeM9+m+Ss93VxZtKRGRwjC+6btwnFn2X5Hr6Zppl2Hp3Uqzp4cJdhgrpbOM/ZcVjnUQ=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=b/HIGzlK; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="b/HIGzlK"
-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
-	s=mail; t=1775744353;
-	bh=V3M5/+eiv7Jh1DsCad4yjgGbVosE62VvCDePOQgvn2Q=;
-	h=Subject:From:To:Cc:Date:In-Reply-To:References:From;
-	b=b/HIGzlKrcfkgv8rRQQsJZfk38ZZtoJrU+KcIWQHLbTbt6jC3arUGATU6zOYzGmlR
-	 wkXMCqAvWB00m3AqjE5YXQtHwSboV2SZwu08mABVbDy+XH6vcNkl4DsJJG+TYCSpGm
-	 GP9ISEZlfOFhZQoBjN9AQSUsZ8I3+RnxvBmTjF/8p3aC37lJsuxLJcwD8SGnRbd2GS
-	 DAAd2qJb3wym6wgSQ3qRHdJjEgozgmiO3/wzYPesrUA8kBsVO7sCGWWV4yhijzTWw6
-	 GWVb95sXDO1tUS03CgyT2K3RxOl92ggg3Fp/6uMT4Dsdxvut6jiVzEuhhuSWnNS2qy
-	 Qt+E2TXZxmcNA==
-Received: from [100.64.0.214] (unknown [100.64.0.214])
-	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange ECDHE (prime256v1) server-signature RSA-PSS (4096 bits))
-	(No client certificate requested)
-	(Authenticated sender: nicolas)
-	by bali.collaboradmins.com (Postfix) with ESMTPSA id BD1B117E0C83;
-	Thu,  9 Apr 2026 16:19:11 +0200 (CEST)
-Message-ID: <517dc6e9de0e284b3dc22952d9479616e6c8ec62.camel@collabora.com>
-Subject: Re: [PATCH 7/7] media: rkvdec: Add multicore IOMMU support
-From: Nicolas Dufresne <nicolas.dufresne@collabora.com>
-To: Detlev Casanova <detlev.casanova@collabora.com>, Mauro Carvalho Chehab	
- <mchehab@kernel.org>, Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
- Heiko Stuebner <heiko@sntech.de>, Hans Verkuil <hverkuil+cisco@kernel.org>,
- Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
-	linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
-	linux-arm-kernel@lists.infradead.org
-Date: Thu, 09 Apr 2026 10:19:10 -0400
-In-Reply-To: <20260409-rkvdec-multicore-v1-7-62b316abf0f7@collabora.com>
-References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-	 <20260409-rkvdec-multicore-v1-7-62b316abf0f7@collabora.com>
-Autocrypt: addr=nicolas.dufresne@collabora.com; prefer-encrypt=mutual;
- keydata=mDMEaCN2ixYJKwYBBAHaRw8BAQdAM0EHepTful3JOIzcPv6ekHOenE1u0vDG1gdHFrChD
- /e0J05pY29sYXMgRHVmcmVzbmUgPG5pY29sYXNAbmR1ZnJlc25lLmNhPoicBBMWCgBEAhsDBQsJCA
- cCAiICBhUKCQgLAgQWAgMBAh4HAheABQkJZfd1FiEE7w1SgRXEw8IaBG8S2UGUUSlgcvQFAmibrjo
- CGQEACgkQ2UGUUSlgcvQlQwD/RjpU1SZYcKG6pnfnQ8ivgtTkGDRUJ8gP3fK7+XUjRNIA/iXfhXMN
- abIWxO2oCXKf3TdD7aQ4070KO6zSxIcxgNQFtDFOaWNvbGFzIER1ZnJlc25lIDxuaWNvbGFzLmR1Z
- nJlc25lQGNvbGxhYm9yYS5jb20+iJkEExYKAEECGwMFCwkIBwICIgIGFQoJCAsCBBYCAwECHgcCF4
- AWIQTvDVKBFcTDwhoEbxLZQZRRKWBy9AUCaCyyxgUJCWX3dQAKCRDZQZRRKWBy9ARJAP96pFmLffZ
- smBUpkyVBfFAf+zq6BJt769R0al3kHvUKdgD9G7KAHuioxD2v6SX7idpIazjzx8b8rfzwTWyOQWHC
- AAS0LU5pY29sYXMgRHVmcmVzbmUgPG5pY29sYXMuZHVmcmVzbmVAZ21haWwuY29tPoiZBBMWCgBBF
- iEE7w1SgRXEw8IaBG8S2UGUUSlgcvQFAmibrGYCGwMFCQll93UFCwkIBwICIgIGFQoJCAsCBBYCAw
- ECHgcCF4AACgkQ2UGUUSlgcvRObgD/YnQjfi4+L8f4fI7p1pPMTwRTcaRdy6aqkKEmKsCArzQBAK8
- bRLv9QjuqsE6oQZra/RB4widZPvphs78H0P6NmpIJ
-Organization: Collabora Canada
-Content-Type: multipart/signed; micalg="pgp-sha512";
-	protocol="application/pgp-signature"; boundary="=-0Hey9sLhjTZTeirzEJYW"
-User-Agent: Evolution 3.58.3 (3.58.3-1.fc43) 
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
-MIME-Version: 1.0
-
-
---=-0Hey9sLhjTZTeirzEJYW
-Content-Type: text/plain; charset="UTF-8"
-Content-Transfer-Encoding: quoted-printable
-
-Le jeudi 09 avril 2026 =C3=A0 09:50 -0400, Detlev Casanova a =C3=A9crit=C2=
-=A0:
-> As each core has its own IOMMU core, buffers must be mapped in each
-> core's IOMMU so that any run() call can use any core without having to
-> remap everything.
->=20
-> To do that, we use rockchip iommu domain's iommu devices list.
-> With that, one IOMMU domain can be mapped on multiple devices, meaning
-> that each call to iommu_map() will flush the new mapping on all devices
-> in the list.
->=20
-> The IOMMU domain that will have all devices in its list is the first
-> core's default domain.
->=20
-> Another domain cannot be used because VB2 allocates buffers through the
-> DMA engine, which uses iommu_get_dma_domain() to find the domain to map
-> buffers through.
->=20
-> The IOMMU restore function can still work as before, but needs to be more
-> explicit in what domain to attach the device to.
-> That is because detaching the empty domain will reattach the core's defau=
-lt
-> domain, which is wrong (except for the first "main" core).
->=20
-> The RCB temporary buffers are allocated in a dedicated SRAM, each
-> core has its own SRAM, so the mapping for each core's SRAM is added in th=
-e
-> global domain.
->=20
-> Everything else is mapped through the first core's default domain, making
-> the driver write the mappings on both IOMMU cores.
-
-Just raising an issue with the patch ordering here. I'm worried in a git bi=
-sect,
-the driver will be broken until we apply this last patch. Can we make sure =
-that
-the driver bisects ? (or tell me if I'm wrong)
-
-Nicolas
-
->=20
-> Signed-off-by: Detlev Casanova <detlev.casanova@collabora.com>
-> ---
-> =C2=A0.../media/platform/rockchip/rkvdec/rkvdec-rcb.c=C2=A0=C2=A0=C2=A0 |=
- 21 ++++++-------
-> =C2=A0.../media/platform/rockchip/rkvdec/rkvdec-rcb.h=C2=A0=C2=A0=C2=A0 |=
-=C2=A0 6 ++--
-> =C2=A0drivers/media/platform/rockchip/rkvdec/rkvdec.c=C2=A0=C2=A0=C2=A0 |=
- 35 +++++++++++++++++-----
-> =C2=A0drivers/media/platform/rockchip/rkvdec/rkvdec.h=C2=A0=C2=A0=C2=A0 |=
-=C2=A0 2 +-
-> =C2=A04 files changed, 44 insertions(+), 20 deletions(-)
->=20
-> diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c b/driver=
-s/media/platform/rockchip/rkvdec/rkvdec-rcb.c
-> index 190fb7438e8c..977e37cf209b 100644
-> --- a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c
-> +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c
-> @@ -57,7 +57,7 @@ bool rkvdec_rcb_buf_validate_size(struct rkvdec_ctx *ct=
-x)
-> =C2=A0	return ret;
-> =C2=A0}
-> =C2=A0
-> -void rkvdec_free_rcb(struct rkvdec_core *core)
-> +void rkvdec_free_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *core=
-)
-> =C2=A0{
-> =C2=A0	struct rkvdec_rcb_config *cfg =3D core->rcb_config;
-> =C2=A0	unsigned long virt_addr;
-> @@ -76,12 +76,12 @@ void rkvdec_free_rcb(struct rkvdec_core *core)
-> =C2=A0		case RKVDEC_ALLOC_SRAM:
-> =C2=A0			virt_addr =3D (unsigned long)cfg->rcb_bufs[i].cpu;
-> =C2=A0
-> -			if (core->iommu_domain)
-> -				iommu_unmap(core->iommu_domain, virt_addr, rcb_size);
-> +			if (rkvdec->iommu_global_domain)
-> +				iommu_unmap(rkvdec->iommu_global_domain, virt_addr, rcb_size);
-> =C2=A0			gen_pool_free(core->sram_pool, virt_addr, rcb_size);
-> =C2=A0			break;
-> =C2=A0		case RKVDEC_ALLOC_DMA:
-> -			dma_free_coherent(core->dev,
-> +			dma_free_coherent(rkvdec->main_core->dev,
-> =C2=A0					=C2=A0 rcb_size,
-> =C2=A0					=C2=A0 cfg->rcb_bufs[i].cpu,
-> =C2=A0					=C2=A0 cfg->rcb_bufs[i].dma);
-> @@ -97,7 +97,8 @@ void rkvdec_free_rcb(struct rkvdec_core *core)
-> =C2=A0	core->rcb_config =3D NULL;
-> =C2=A0}
-> =C2=A0
-> -int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 height,
-> +int rkvdec_allocate_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *c=
-ore,
-> +			u32 width, u32 height,
-> =C2=A0			const struct rcb_size_info *size_info,
-> =C2=A0			size_t rcb_count)
-> =C2=A0{
-> @@ -132,7 +133,7 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core, u32=
- width, u32 height,
-> =C2=A0
-> =C2=A0		/* Try allocating an SRAM buffer */
-> =C2=A0		if (core->sram_pool) {
-> -			if (core->iommu_domain)
-> +			if (rkvdec->iommu_global_domain)
-> =C2=A0				rcb_size =3D ALIGN(rcb_size, SZ_4K);
-> =C2=A0
-> =C2=A0			cpu =3D gen_pool_dma_zalloc_align(core->sram_pool,
-> @@ -142,11 +143,11 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core, u=
-32 width, u32 height,
-> =C2=A0		}
-> =C2=A0
-> =C2=A0		/* If an IOMMU is used, map the SRAM address through it */
-> -		if (cpu && core->iommu_domain) {
-> +		if (cpu && rkvdec->iommu_global_domain) {
-> =C2=A0			unsigned long virt_addr =3D (unsigned long)cpu;
-> =C2=A0			phys_addr_t phys_addr =3D dma;
-> =C2=A0
-> -			ret =3D iommu_map(core->iommu_domain, virt_addr, phys_addr,
-> +			ret =3D iommu_map(rkvdec->iommu_global_domain, virt_addr, phys_addr,
-> =C2=A0					rcb_size, IOMMU_READ | IOMMU_WRITE, 0);
-> =C2=A0			if (ret) {
-> =C2=A0				gen_pool_free(core->sram_pool,
-> @@ -166,7 +167,7 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core, u32=
- width, u32 height,
-> =C2=A0ram_fallback:
-> =C2=A0		/* Fallback to RAM */
-> =C2=A0		if (!cpu) {
-> -			cpu =3D dma_alloc_coherent(core->dev,
-> +			cpu =3D dma_alloc_coherent(rkvdec->main_core->dev,
-> =C2=A0						 rcb_size,
-> =C2=A0						 &dma,
-> =C2=A0						 GFP_KERNEL);
-> @@ -189,7 +190,7 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core, u32=
- width, u32 height,
-> =C2=A0	return 0;
-> =C2=A0
-> =C2=A0err_alloc:
-> -	rkvdec_free_rcb(core);
-> +	rkvdec_free_rcb(rkvdec, core);
-> =C2=A0
-> =C2=A0	return ret;
-> =C2=A0}
-> diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h b/driver=
-s/media/platform/rockchip/rkvdec/rkvdec-rcb.h
-> index a12af9b7dc2b..d1149afe7fda 100644
-> --- a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h
-> +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h
-> @@ -8,6 +8,7 @@
-> =C2=A0
-> =C2=A0#include <linux/types.h>
-> =C2=A0
-> +struct rkvdec_dev;
-> =C2=A0struct rkvdec_ctx;
-> =C2=A0struct rkvdec_core;
-> =C2=A0
-> @@ -21,11 +22,12 @@ struct rcb_size_info {
-> =C2=A0	enum rcb_axis axis;
-> =C2=A0};
-> =C2=A0
-> -int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 height,
-> +int rkvdec_allocate_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *c=
-ore,
-> +			u32 width, u32 height,
-> =C2=A0			const struct rcb_size_info *size_info,
-> =C2=A0			size_t rcb_count);
-> =C2=A0dma_addr_t rkvdec_rcb_buf_dma_addr(struct rkvdec_ctx *ctx, int id);
-> =C2=A0size_t rkvdec_rcb_buf_size(struct rkvdec_ctx *ctx, int id);
-> =C2=A0int rkvdec_rcb_buf_count(struct rkvdec_ctx *ctx);
-> =C2=A0bool rkvdec_rcb_buf_validate_size(struct rkvdec_ctx *ctx);
-> -void rkvdec_free_rcb(struct rkvdec_core *core);
-> +void rkvdec_free_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *core=
-);
-> diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.c b/drivers/me=
-dia/platform/rockchip/rkvdec/rkvdec.c
-> index c2818f1575ef..2930e9b64906 100644
-> --- a/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-> +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-> @@ -1204,9 +1204,9 @@ static void rkvdec_device_run(void *priv)
-> =C2=A0	}
-> =C2=A0
-> =C2=A0	if (!rkvdec_rcb_buf_validate_size(ctx)) {
-> -		rkvdec_free_rcb(ctx->core);
-> +		rkvdec_free_rcb(ctx->dev, ctx->core);
-> =C2=A0
-> -		ret =3D rkvdec_allocate_rcb(ctx->core,
-> +		ret =3D rkvdec_allocate_rcb(ctx->dev, ctx->core,
-> =C2=A0					=C2=A0 ctx->decoded_fmt.fmt.pix_mp.width,
-> =C2=A0					=C2=A0 ctx->decoded_fmt.fmt.pix_mp.height,
-> =C2=A0					=C2=A0 ctx->dev->variant->rcb_sizes,
-> @@ -1486,6 +1486,7 @@ static void rkvdec_v4l2_cleanup(struct rkvdec_dev *=
-rkvdec)
-> =C2=A0
-> =C2=A0static void rkvdec_iommu_restore(struct rkvdec_core *core)
-> =C2=A0{
-> +	int ret;
-> =C2=A0	if (core->empty_domain) {
-> =C2=A0		/*
-> =C2=A0		 * To rewrite mapping into the attached IOMMU core, attach a new =
-empty domain that
-> @@ -1494,8 +1495,14 @@ static void rkvdec_iommu_restore(struct rkvdec_cor=
-e *core)
-> =C2=A0		 * This is safely done in this interrupt handler to make sure no =
-memory get mapped
-> =C2=A0		 * through the IOMMU while the empty domain is attached.
-> =C2=A0		 */
-> -		iommu_attach_device(core->empty_domain, core->dev);
-> +		iommu_detach_device(core->curr_ctx->dev->iommu_global_domain, core->de=
-v);
-> +		ret =3D iommu_attach_device(core->empty_domain, core->dev);
-> +		if (ret)
-> +			dev_warn(core->dev, "Cannot attach empty domain: %d\n", ret);
-> =C2=A0		iommu_detach_device(core->empty_domain, core->dev);
-> +		ret =3D iommu_attach_device(core->curr_ctx->dev->iommu_global_domain, =
-core->dev);
-> +		if (ret)
-> +			dev_warn(core->dev, "Cannot attach global domain: %d\n", ret);
-> =C2=A0	}
-> =C2=A0}
-> =C2=A0
-> @@ -1858,6 +1865,8 @@ static int rkvdec_probe(struct platform_device *pde=
-v)
-> =C2=A0
-> =C2=A0	core =3D &rkvdec->cores[rkvdec->core_count++];
-> =C2=A0
-> +	core->id =3D rkvdec->core_count - 1;
-> +
-> =C2=A0	platform_set_drvdata(pdev, rkvdec);
-> =C2=A0	core->dev =3D &pdev->dev;
-> =C2=A0	INIT_DELAYED_WORK(&core->watchdog_work, rkvdec_watchdog_func);
-> @@ -1883,12 +1892,24 @@ static int rkvdec_probe(struct platform_device *p=
-dev)
-> =C2=A0			return PTR_ERR(core->link);
-> =C2=A0	}
-> =C2=A0
-> -	core->iommu_domain =3D iommu_get_domain_for_dev(&pdev->dev);
-> -	if (core->iommu_domain) {
-> +	if (iommu_get_domain_for_dev(&pdev->dev)) {
-> =C2=A0		core->empty_domain =3D iommu_paging_domain_alloc(core->dev);
-> =C2=A0
-> -		if (!core->empty_domain)
-> +		if (IS_ERR(core->empty_domain))
-> =C2=A0			dev_warn(core->dev, "cannot alloc new empty domain\n");
-> +
-> +		if (!rkvdec->iommu_global_domain) {
-> +			rkvdec->iommu_global_domain =3D iommu_get_domain_for_dev(core->dev);
-> +
-> +			if (IS_ERR(rkvdec->iommu_global_domain)) {
-> +				rkvdec->iommu_global_domain =3D NULL;
-> +				dev_warn_once(core->dev, "cannot alloc new global domain\n");
-> +			}
-> +		}
-> +
-> +		ret =3D iommu_attach_device(rkvdec->iommu_global_domain, core->dev);
-> +		if (ret)
-> +			dev_warn(core->dev, "cannot attach global domain to core %d\n", core-=
->id);
-> =C2=A0	}
-> =C2=A0
-> =C2=A0	ret =3D dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
-> @@ -1961,7 +1982,7 @@ static void rkvdec_remove(struct platform_device *p=
-dev)
-> =C2=A0		if (rkvdec->cores[i].empty_domain)
-> =C2=A0			iommu_domain_free(rkvdec->cores[i].empty_domain);
-> =C2=A0
-> -		rkvdec_free_rcb(&rkvdec->cores[i]);
-> +		rkvdec_free_rcb(rkvdec, &rkvdec->cores[i]);
-> =C2=A0	}
-> =C2=A0}
-> =C2=A0
-> diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.h b/drivers/me=
-dia/platform/rockchip/rkvdec/rkvdec.h
-> index 4f042a367dc0..ccd766b220c7 100644
-> --- a/drivers/media/platform/rockchip/rkvdec/rkvdec.h
-> +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.h
-> @@ -135,7 +135,6 @@ struct rkvdec_core {
-> =C2=A0	void __iomem *link;
-> =C2=A0	struct delayed_work watchdog_work;
-> =C2=A0	struct gen_pool *sram_pool;
-> -	struct iommu_domain *iommu_domain;
-> =C2=A0	struct iommu_domain *empty_domain;
-> =C2=A0	struct rkvdec_rcb_config *rcb_config;
-> =C2=A0	struct rkvdec_ctx *curr_ctx;
-> @@ -155,6 +154,7 @@ struct rkvdec_dev {
-> =C2=A0	unsigned int available_core_count;
-> =C2=A0	spinlock_t cores_lock; /* serializes core list access */
-> =C2=A0	struct rkvdec_core *main_core;
-> +	struct iommu_domain *iommu_global_domain;
-> =C2=A0};
-> =C2=A0
-> =C2=A0struct rkvdec_ctx {
-
---=-0Hey9sLhjTZTeirzEJYW
-Content-Type: application/pgp-signature; name="signature.asc"
-Content-Description: This is a digitally signed message part
-Content-Transfer-Encoding: 7bit
-
------BEGIN PGP SIGNATURE-----
-
-iHUEABYKAB0WIQTvDVKBFcTDwhoEbxLZQZRRKWBy9AUCade1XgAKCRDZQZRRKWBy
-9DnKAQDJtAASe6SiickkeAzlO+XdvrxlSxhsCWnQxvtuFM97rwD+LI+0vIjaN001
-xcPK2Z7PRkSlDfAVJ24WRD4hWKGziwE=
-=fi3S
------END PGP SIGNATURE-----
-
---=-0Hey9sLhjTZTeirzEJYW--
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from sender4-pp-f112.zoho.com (sender4-pp-f112.zoho.com [136.143.188.112])
-	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
-	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 2709115624B;
-	Thu,  9 Apr 2026 14:49:33 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=pass smtp.client-ip=136.143.188.112
-ARC-Seal:i=2; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775746175; cv=pass; b=cj34D06KMkwH0vNdRFE2KwBfVr5OtibTdXagFxG8Dr528pFH84Dka2JfBCCUmsQwN5XCEBXr9xsh2kKxlmhRQh7k317J1ixvAGFVb9QGhlUu6bqHqXDLQ+6zI1xJq/RHlHn1q4v45pamMX3Big4DPnPKqmIcDPut/GEOblaHFH0=
-ARC-Message-Signature:i=2; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775746175; c=relaxed/simple;
-	bh=3zGpVaERqBzMwoPtmMop8EvJ9glewZiiHG0yNfu/iUU=;
-	h=Message-ID:Date:MIME-Version:Subject:To:Cc:References:From:
-	 In-Reply-To:Content-Type; b=KauN9OX2H2jd0ve/5Klexo7ATfZXA0aczY/FTvZZWNqxzfAhoaNN3PudB5FPX3AebO/ppPj9pG/LpWmDt8L32VRfbQoY4urInFgEdOiX7LV8xH1bAfT1UnUNb9U+mOEO/UtoRM1qbO5U6taI44j3jQicrLFdmuEr++r46c0GQYw=
-ARC-Authentication-Results:i=2; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (1024-bit key) header.d=collabora.com header.i=detlev.casanova@collabora.com header.b=OMrhomFc; arc=pass smtp.client-ip=136.143.188.112
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (1024-bit key) header.d=collabora.com header.i=detlev.casanova@collabora.com header.b="OMrhomFc"
-ARC-Seal: i=1; a=rsa-sha256; t=1775746150; cv=none; 
-	d=zohomail.com; s=zohoarc; 
-	b=FyjrxfSs10DNUXtp2oEHYFs+x2xKQ8PL/bNjEjVnYvjY/VhrzKYBHJX+axnbY+zEAVUkHcdpVuYnJw4Q/g39sk3s5OeFvw0P2FLS8d/QomWcda8gTRlqAepJmOMsRTSHUD/vz3P/G1aOSR4aPu789dzVIabWNDoY0XViC5aua+4=
-ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=zohomail.com; s=zohoarc; 
-	t=1775746150; h=Content-Type:Content-Transfer-Encoding:Cc:Cc:Date:Date:From:From:In-Reply-To:MIME-Version:Message-ID:References:Subject:Subject:To:To:Message-Id:Reply-To; 
-	bh=CR9mAVgxszVB53Zvua2wkg88/t3SzJ3xM3rQRaf39VM=; 
-	b=aO3NY/k4Vpuq1VWM8zTwvg+eQzaYOyzzebFTlxTGc5Qn8cjfw3id3CsCA4pCNeFrIe0O5zXzzyOFf3BGsUT+V3bADfyUKGSGX8c/OkKkVMJfg0J2zJcpfK/knx3JqYskMN6g8o+1U/qOsGIzt4TwjRvD7DxEuw5MyNAXwpDeZKE=
-ARC-Authentication-Results: i=1; mx.zohomail.com;
-	dkim=pass  header.i=collabora.com;
-	spf=pass  smtp.mailfrom=detlev.casanova@collabora.com;
-	dmarc=pass header.from=<detlev.casanova@collabora.com>
-DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/relaxed; t=1775746150;
-	s=zohomail; d=collabora.com; i=detlev.casanova@collabora.com;
-	h=Message-ID:Date:Date:MIME-Version:Subject:Subject:To:To:Cc:Cc:References:From:From:In-Reply-To:Content-Type:Content-Transfer-Encoding:Message-Id:Reply-To;
-	bh=CR9mAVgxszVB53Zvua2wkg88/t3SzJ3xM3rQRaf39VM=;
-	b=OMrhomFcpM42/enJAPw7i8P9Z0b8+sCp4adXXJMG2Lo15WJzx5/4y927au7K32Hv
-	HhlMPripihSipxuNl/+Fup3Dao8Jh15qGEwNKY46ICj/Kj7MFkBYNoB1eNG7JZlkr9P
-	kS35stIgCPM6UfuCNgza+5cz/5s+rSd5Jlf2a4Dk=
-Received: by mx.zohomail.com with SMTPS id 177574614723085.36204229766054;
-	Thu, 9 Apr 2026 07:49:07 -0700 (PDT)
-Message-ID: <040f65ea-2559-4186-b733-3dc59a1ecc0b@collabora.com>
-Date: Thu, 9 Apr 2026 10:49:05 -0400
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
-MIME-Version: 1.0
-User-Agent: Mozilla Thunderbird
-Subject: Re: [PATCH 7/7] media: rkvdec: Add multicore IOMMU support
-To: Nicolas Dufresne <nicolas.dufresne@collabora.com>,
- Mauro Carvalho Chehab <mchehab@kernel.org>,
- Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
- Heiko Stuebner <heiko@sntech.de>, Hans Verkuil <hverkuil+cisco@kernel.org>,
- Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org,
- linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org,
- linux-arm-kernel@lists.infradead.org
-References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
- <20260409-rkvdec-multicore-v1-7-62b316abf0f7@collabora.com>
- <517dc6e9de0e284b3dc22952d9479616e6c8ec62.camel@collabora.com>
-Content-Language: en-US
-From: Detlev Casanova <detlev.casanova@collabora.com>
-In-Reply-To: <517dc6e9de0e284b3dc22952d9479616e6c8ec62.camel@collabora.com>
-Content-Type: text/plain; charset=UTF-8; format=flowed
-Content-Transfer-Encoding: 8bit
-X-ZohoMailClient: External
-
-Hi Nicolas,
-
-On 4/9/26 10:19, Nicolas Dufresne wrote:
-> Le jeudi 09 avril 2026 à 09:50 -0400, Detlev Casanova a écrit :
->> As each core has its own IOMMU core, buffers must be mapped in each
->> core's IOMMU so that any run() call can use any core without having to
->> remap everything.
->>
->> To do that, we use rockchip iommu domain's iommu devices list.
->> With that, one IOMMU domain can be mapped on multiple devices, meaning
->> that each call to iommu_map() will flush the new mapping on all devices
->> in the list.
->>
->> The IOMMU domain that will have all devices in its list is the first
->> core's default domain.
->>
->> Another domain cannot be used because VB2 allocates buffers through the
->> DMA engine, which uses iommu_get_dma_domain() to find the domain to map
->> buffers through.
->>
->> The IOMMU restore function can still work as before, but needs to be more
->> explicit in what domain to attach the device to.
->> That is because detaching the empty domain will reattach the core's default
->> domain, which is wrong (except for the first "main" core).
->>
->> The RCB temporary buffers are allocated in a dedicated SRAM, each
->> core has its own SRAM, so the mapping for each core's SRAM is added in the
->> global domain.
->>
->> Everything else is mapped through the first core's default domain, making
->> the driver write the mappings on both IOMMU cores.
-> Just raising an issue with the patch ordering here. I'm worried in a git bisect,
-> the driver will be broken until we apply this last patch. Can we make sure that
-> the driver bisects ? (or tell me if I'm wrong)
-No, you're right. That's also why I mentioned it in the cover letter. 
-This commit is also not too big, so I'll merge the last 3 commits and 
-adapt the commit message to keep the information from the 3 (the commit 
-messages are why I wanted to keep them separate, but there is no good 
-way to keep them that way)
-
-Detlev.
->
->> Signed-off-by: Detlev Casanova <detlev.casanova@collabora.com>
->> ---
->>   .../media/platform/rockchip/rkvdec/rkvdec-rcb.c    | 21 ++++++-------
->>   .../media/platform/rockchip/rkvdec/rkvdec-rcb.h    |  6 ++--
->>   drivers/media/platform/rockchip/rkvdec/rkvdec.c    | 35 +++++++++++++++++-----
->>   drivers/media/platform/rockchip/rkvdec/rkvdec.h    |  2 +-
->>   4 files changed, 44 insertions(+), 20 deletions(-)
->>
->> diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c b/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c
->> index 190fb7438e8c..977e37cf209b 100644
->> --- a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c
->> +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c
->> @@ -57,7 +57,7 @@ bool rkvdec_rcb_buf_validate_size(struct rkvdec_ctx *ctx)
->>   	return ret;
->>   }
->>   
->> -void rkvdec_free_rcb(struct rkvdec_core *core)
->> +void rkvdec_free_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *core)
->>   {
->>   	struct rkvdec_rcb_config *cfg = core->rcb_config;
->>   	unsigned long virt_addr;
->> @@ -76,12 +76,12 @@ void rkvdec_free_rcb(struct rkvdec_core *core)
->>   		case RKVDEC_ALLOC_SRAM:
->>   			virt_addr = (unsigned long)cfg->rcb_bufs[i].cpu;
->>   
->> -			if (core->iommu_domain)
->> -				iommu_unmap(core->iommu_domain, virt_addr, rcb_size);
->> +			if (rkvdec->iommu_global_domain)
->> +				iommu_unmap(rkvdec->iommu_global_domain, virt_addr, rcb_size);
->>   			gen_pool_free(core->sram_pool, virt_addr, rcb_size);
->>   			break;
->>   		case RKVDEC_ALLOC_DMA:
->> -			dma_free_coherent(core->dev,
->> +			dma_free_coherent(rkvdec->main_core->dev,
->>   					  rcb_size,
->>   					  cfg->rcb_bufs[i].cpu,
->>   					  cfg->rcb_bufs[i].dma);
->> @@ -97,7 +97,8 @@ void rkvdec_free_rcb(struct rkvdec_core *core)
->>   	core->rcb_config = NULL;
->>   }
->>   
->> -int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 height,
->> +int rkvdec_allocate_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *core,
->> +			u32 width, u32 height,
->>   			const struct rcb_size_info *size_info,
->>   			size_t rcb_count)
->>   {
->> @@ -132,7 +133,7 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 height,
->>   
->>   		/* Try allocating an SRAM buffer */
->>   		if (core->sram_pool) {
->> -			if (core->iommu_domain)
->> +			if (rkvdec->iommu_global_domain)
->>   				rcb_size = ALIGN(rcb_size, SZ_4K);
->>   
->>   			cpu = gen_pool_dma_zalloc_align(core->sram_pool,
->> @@ -142,11 +143,11 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 height,
->>   		}
->>   
->>   		/* If an IOMMU is used, map the SRAM address through it */
->> -		if (cpu && core->iommu_domain) {
->> +		if (cpu && rkvdec->iommu_global_domain) {
->>   			unsigned long virt_addr = (unsigned long)cpu;
->>   			phys_addr_t phys_addr = dma;
->>   
->> -			ret = iommu_map(core->iommu_domain, virt_addr, phys_addr,
->> +			ret = iommu_map(rkvdec->iommu_global_domain, virt_addr, phys_addr,
->>   					rcb_size, IOMMU_READ | IOMMU_WRITE, 0);
->>   			if (ret) {
->>   				gen_pool_free(core->sram_pool,
->> @@ -166,7 +167,7 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 height,
->>   ram_fallback:
->>   		/* Fallback to RAM */
->>   		if (!cpu) {
->> -			cpu = dma_alloc_coherent(core->dev,
->> +			cpu = dma_alloc_coherent(rkvdec->main_core->dev,
->>   						 rcb_size,
->>   						 &dma,
->>   						 GFP_KERNEL);
->> @@ -189,7 +190,7 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 height,
->>   	return 0;
->>   
->>   err_alloc:
->> -	rkvdec_free_rcb(core);
->> +	rkvdec_free_rcb(rkvdec, core);
->>   
->>   	return ret;
->>   }
->> diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h b/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h
->> index a12af9b7dc2b..d1149afe7fda 100644
->> --- a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h
->> +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h
->> @@ -8,6 +8,7 @@
->>   
->>   #include <linux/types.h>
->>   
->> +struct rkvdec_dev;
->>   struct rkvdec_ctx;
->>   struct rkvdec_core;
->>   
->> @@ -21,11 +22,12 @@ struct rcb_size_info {
->>   	enum rcb_axis axis;
->>   };
->>   
->> -int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 height,
->> +int rkvdec_allocate_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *core,
->> +			u32 width, u32 height,
->>   			const struct rcb_size_info *size_info,
->>   			size_t rcb_count);
->>   dma_addr_t rkvdec_rcb_buf_dma_addr(struct rkvdec_ctx *ctx, int id);
->>   size_t rkvdec_rcb_buf_size(struct rkvdec_ctx *ctx, int id);
->>   int rkvdec_rcb_buf_count(struct rkvdec_ctx *ctx);
->>   bool rkvdec_rcb_buf_validate_size(struct rkvdec_ctx *ctx);
->> -void rkvdec_free_rcb(struct rkvdec_core *core);
->> +void rkvdec_free_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *core);
->> diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.c b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
->> index c2818f1575ef..2930e9b64906 100644
->> --- a/drivers/media/platform/rockchip/rkvdec/rkvdec.c
->> +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
->> @@ -1204,9 +1204,9 @@ static void rkvdec_device_run(void *priv)
->>   	}
->>   
->>   	if (!rkvdec_rcb_buf_validate_size(ctx)) {
->> -		rkvdec_free_rcb(ctx->core);
->> +		rkvdec_free_rcb(ctx->dev, ctx->core);
->>   
->> -		ret = rkvdec_allocate_rcb(ctx->core,
->> +		ret = rkvdec_allocate_rcb(ctx->dev, ctx->core,
->>   					  ctx->decoded_fmt.fmt.pix_mp.width,
->>   					  ctx->decoded_fmt.fmt.pix_mp.height,
->>   					  ctx->dev->variant->rcb_sizes,
->> @@ -1486,6 +1486,7 @@ static void rkvdec_v4l2_cleanup(struct rkvdec_dev *rkvdec)
->>   
->>   static void rkvdec_iommu_restore(struct rkvdec_core *core)
->>   {
->> +	int ret;
->>   	if (core->empty_domain) {
->>   		/*
->>   		 * To rewrite mapping into the attached IOMMU core, attach a new empty domain that
->> @@ -1494,8 +1495,14 @@ static void rkvdec_iommu_restore(struct rkvdec_core *core)
->>   		 * This is safely done in this interrupt handler to make sure no memory get mapped
->>   		 * through the IOMMU while the empty domain is attached.
->>   		 */
->> -		iommu_attach_device(core->empty_domain, core->dev);
->> +		iommu_detach_device(core->curr_ctx->dev->iommu_global_domain, core->dev);
->> +		ret = iommu_attach_device(core->empty_domain, core->dev);
->> +		if (ret)
->> +			dev_warn(core->dev, "Cannot attach empty domain: %d\n", ret);
->>   		iommu_detach_device(core->empty_domain, core->dev);
->> +		ret = iommu_attach_device(core->curr_ctx->dev->iommu_global_domain, core->dev);
->> +		if (ret)
->> +			dev_warn(core->dev, "Cannot attach global domain: %d\n", ret);
->>   	}
->>   }
->>   
->> @@ -1858,6 +1865,8 @@ static int rkvdec_probe(struct platform_device *pdev)
->>   
->>   	core = &rkvdec->cores[rkvdec->core_count++];
->>   
->> +	core->id = rkvdec->core_count - 1;
->> +
->>   	platform_set_drvdata(pdev, rkvdec);
->>   	core->dev = &pdev->dev;
->>   	INIT_DELAYED_WORK(&core->watchdog_work, rkvdec_watchdog_func);
->> @@ -1883,12 +1892,24 @@ static int rkvdec_probe(struct platform_device *pdev)
->>   			return PTR_ERR(core->link);
->>   	}
->>   
->> -	core->iommu_domain = iommu_get_domain_for_dev(&pdev->dev);
->> -	if (core->iommu_domain) {
->> +	if (iommu_get_domain_for_dev(&pdev->dev)) {
->>   		core->empty_domain = iommu_paging_domain_alloc(core->dev);
->>   
->> -		if (!core->empty_domain)
->> +		if (IS_ERR(core->empty_domain))
->>   			dev_warn(core->dev, "cannot alloc new empty domain\n");
->> +
->> +		if (!rkvdec->iommu_global_domain) {
->> +			rkvdec->iommu_global_domain = iommu_get_domain_for_dev(core->dev);
->> +
->> +			if (IS_ERR(rkvdec->iommu_global_domain)) {
->> +				rkvdec->iommu_global_domain = NULL;
->> +				dev_warn_once(core->dev, "cannot alloc new global domain\n");
->> +			}
->> +		}
->> +
->> +		ret = iommu_attach_device(rkvdec->iommu_global_domain, core->dev);
->> +		if (ret)
->> +			dev_warn(core->dev, "cannot attach global domain to core %d\n", core->id);
->>   	}
->>   
->>   	ret = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
->> @@ -1961,7 +1982,7 @@ static void rkvdec_remove(struct platform_device *pdev)
->>   		if (rkvdec->cores[i].empty_domain)
->>   			iommu_domain_free(rkvdec->cores[i].empty_domain);
->>   
->> -		rkvdec_free_rcb(&rkvdec->cores[i]);
->> +		rkvdec_free_rcb(rkvdec, &rkvdec->cores[i]);
->>   	}
->>   }
->>   
->> diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.h b/drivers/media/platform/rockchip/rkvdec/rkvdec.h
->> index 4f042a367dc0..ccd766b220c7 100644
->> --- a/drivers/media/platform/rockchip/rkvdec/rkvdec.h
->> +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.h
->> @@ -135,7 +135,6 @@ struct rkvdec_core {
->>   	void __iomem *link;
->>   	struct delayed_work watchdog_work;
->>   	struct gen_pool *sram_pool;
->> -	struct iommu_domain *iommu_domain;
->>   	struct iommu_domain *empty_domain;
->>   	struct rkvdec_rcb_config *rcb_config;
->>   	struct rkvdec_ctx *curr_ctx;
->> @@ -155,6 +154,7 @@ struct rkvdec_dev {
->>   	unsigned int available_core_count;
->>   	spinlock_t cores_lock; /* serializes core list access */
->>   	struct rkvdec_core *main_core;
->> +	struct iommu_domain *iommu_global_domain;
->>   };
->>   
->>   struct rkvdec_ctx {
-
-
-From mboxrd@z Thu Jan  1 00:00:00 1970
-Received: from bali.collaboradmins.com (bali.collaboradmins.com [148.251.105.195])
-	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
-	(No client certificate requested)
-	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 5803A3DE432;
-	Thu,  9 Apr 2026 15:24:34 +0000 (UTC)
-Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=148.251.105.195
-ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
-	t=1775748276; cv=none; b=P8DObuLOiYDLZLSM54V+txnFBj7fyonjfK+ZpWFLbg2hSw1OktEG4RjBZqhifLmjM6mDM1SE8tPRRaIhCAB9e8gSzlhny7SoJhq8mOp/uYEnE3h3UKb1puR+8oMbgvGu4XKbKdlVHdhfukLnmtG9HQZySXHFOtR74vaTViGuE+U=
-ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
-	s=arc-20240116; t=1775748276; c=relaxed/simple;
-	bh=yRJ6u8GyYNSSyoKD5an4lWZMD1f6h28LyhWT410oxrY=;
-	h=Message-ID:Subject:From:To:Cc:Date:In-Reply-To:References:
-	 Content-Type:MIME-Version; b=Maydpy3hTiOwVURYYPhGKJIJm2IffCQEbI5ReeQV6GnfFLYFUKcC40khvM2gMbtiez9ikxlUS68bFMIfD6Zai6SDghRkerK8PpoYaQHW+3m+1+G3hzYkrbojCN0jnFsCI7H5rpTgnkBngM/hAnXNS4veTH28RgFxIZonsIgEf9c=
-ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com; spf=pass smtp.mailfrom=collabora.com; dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b=Qn0EHVcp; arc=none smtp.client-ip=148.251.105.195
-Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=collabora.com
-Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=collabora.com
-Authentication-Results: smtp.subspace.kernel.org;
-	dkim=pass (2048-bit key) header.d=collabora.com header.i=@collabora.com header.b="Qn0EHVcp"
-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=collabora.com;
-	s=mail; t=1775748272;
-	bh=yRJ6u8GyYNSSyoKD5an4lWZMD1f6h28LyhWT410oxrY=;
-	h=Subject:From:To:Cc:Date:In-Reply-To:References:From;
-	b=Qn0EHVcpR0kF3s1EQhDIZZhJ47WXsX2Ummf6vGbt5BhJvR0hTtKT9sgGOUQkKKYaV
-	 CH3YB3qvt4QeRYwI20Ag2IxOKECqqLBMDo8UPx5sz7kwOVwX9VkWc6ifMILxpRcbyf
-	 pqF3bUrGHk+TUKBL3ulV3ghGDer3gvyOWSCVNY7dLHQoDi5qaJRnqzvnxo/ztcuRqP
-	 GGy89HOHO/vElb7llCrz7ntJ961XWntYt1dK8P55dJuCjM5KTPmcG7T/xeD4D67cez
-	 UbgnHOn0YBchfH48sxcu9cPxpZG4DAKrY372928RuXkZq+Dzwr0Lqa2P0/VOJkl6RC
-	 Jvbxc85pPyZ4A==
-Received: from [100.64.0.214] (unknown [100.64.0.214])
-	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
-	 key-exchange ECDHE (prime256v1) server-signature RSA-PSS (4096 bits) server-digest SHA256)
-	(No client certificate requested)
-	(Authenticated sender: nicolas)
-	by bali.collaboradmins.com (Postfix) with ESMTPSA id 037FC17E12E2;
-	Thu,  9 Apr 2026 17:24:30 +0200 (CEST)
-Message-ID: <e6f8f62568a385cc6d98856f480bd469882b274a.camel@collabora.com>
-Subject: Re: [PATCH 7/7] media: rkvdec: Add multicore IOMMU support
-From: Nicolas Dufresne <nicolas.dufresne@collabora.com>
-To: Detlev Casanova <detlev.casanova@collabora.com>, Mauro Carvalho Chehab	
- <mchehab@kernel.org>, Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>,
- Heiko Stuebner <heiko@sntech.de>, Hans Verkuil <hverkuil+cisco@kernel.org>,
- Jonas Karlman <jonas@kwiboo.se>
-Cc: kernel@collabora.com, linux-media@vger.kernel.org, 
-	linux-kernel@vger.kernel.org, linux-rockchip@lists.infradead.org, 
-	linux-arm-kernel@lists.infradead.org
-Date: Thu, 09 Apr 2026 11:24:29 -0400
-In-Reply-To: <040f65ea-2559-4186-b733-3dc59a1ecc0b@collabora.com>
-References: <20260409-rkvdec-multicore-v1-0-62b316abf0f7@collabora.com>
-	 <20260409-rkvdec-multicore-v1-7-62b316abf0f7@collabora.com>
-	 <517dc6e9de0e284b3dc22952d9479616e6c8ec62.camel@collabora.com>
-	 <040f65ea-2559-4186-b733-3dc59a1ecc0b@collabora.com>
-Autocrypt: addr=nicolas.dufresne@collabora.com; prefer-encrypt=mutual;
- keydata=mDMEaCN2ixYJKwYBBAHaRw8BAQdAM0EHepTful3JOIzcPv6ekHOenE1u0vDG1gdHFrChD
- /e0J05pY29sYXMgRHVmcmVzbmUgPG5pY29sYXNAbmR1ZnJlc25lLmNhPoicBBMWCgBEAhsDBQsJCA
- cCAiICBhUKCQgLAgQWAgMBAh4HAheABQkJZfd1FiEE7w1SgRXEw8IaBG8S2UGUUSlgcvQFAmibrjo
- CGQEACgkQ2UGUUSlgcvQlQwD/RjpU1SZYcKG6pnfnQ8ivgtTkGDRUJ8gP3fK7+XUjRNIA/iXfhXMN
- abIWxO2oCXKf3TdD7aQ4070KO6zSxIcxgNQFtDFOaWNvbGFzIER1ZnJlc25lIDxuaWNvbGFzLmR1Z
- nJlc25lQGNvbGxhYm9yYS5jb20+iJkEExYKAEECGwMFCwkIBwICIgIGFQoJCAsCBBYCAwECHgcCF4
- AWIQTvDVKBFcTDwhoEbxLZQZRRKWBy9AUCaCyyxgUJCWX3dQAKCRDZQZRRKWBy9ARJAP96pFmLffZ
- smBUpkyVBfFAf+zq6BJt769R0al3kHvUKdgD9G7KAHuioxD2v6SX7idpIazjzx8b8rfzwTWyOQWHC
- AAS0LU5pY29sYXMgRHVmcmVzbmUgPG5pY29sYXMuZHVmcmVzbmVAZ21haWwuY29tPoiZBBMWCgBBF
- iEE7w1SgRXEw8IaBG8S2UGUUSlgcvQFAmibrGYCGwMFCQll93UFCwkIBwICIgIGFQoJCAsCBBYCAw
- ECHgcCF4AACgkQ2UGUUSlgcvRObgD/YnQjfi4+L8f4fI7p1pPMTwRTcaRdy6aqkKEmKsCArzQBAK8
- bRLv9QjuqsE6oQZra/RB4widZPvphs78H0P6NmpIJ
-Organization: Collabora Canada
-Content-Type: multipart/signed; micalg="pgp-sha512";
-	protocol="application/pgp-signature"; boundary="=-oRdpf3vSzts/F/hutoEG"
-User-Agent: Evolution 3.58.3 (3.58.3-1.fc43) 
-Precedence: bulk
-X-Mailing-List: linux-media@vger.kernel.org
-List-Id: <linux-media.vger.kernel.org>
-List-Subscribe: <mailto:linux-media+subscribe@vger.kernel.org>
-List-Unsubscribe: <mailto:linux-media+unsubscribe@vger.kernel.org>
-MIME-Version: 1.0
-
-
---=-oRdpf3vSzts/F/hutoEG
-Content-Type: text/plain; charset="UTF-8"
-Content-Transfer-Encoding: quoted-printable
-
-Le jeudi 09 avril 2026 =C3=A0 10:49 -0400, Detlev Casanova a =C3=A9crit=C2=
-=A0:
-> Hi Nicolas,
->=20
-> On 4/9/26 10:19, Nicolas Dufresne wrote:
-> > Le jeudi 09 avril 2026 =C3=A0 09:50 -0400, Detlev Casanova a =C3=A9crit=
-=C2=A0:
-> > > As each core has its own IOMMU core, buffers must be mapped in each
-> > > core's IOMMU so that any run() call can use any core without having t=
-o
-> > > remap everything.
-> > >=20
-> > > To do that, we use rockchip iommu domain's iommu devices list.
-> > > With that, one IOMMU domain can be mapped on multiple devices, meanin=
-g
-> > > that each call to iommu_map() will flush the new mapping on all devic=
-es
-> > > in the list.
-> > >=20
-> > > The IOMMU domain that will have all devices in its list is the first
-> > > core's default domain.
-> > >=20
-> > > Another domain cannot be used because VB2 allocates buffers through t=
-he
-> > > DMA engine, which uses iommu_get_dma_domain() to find the domain to m=
-ap
-> > > buffers through.
-> > >=20
-> > > The IOMMU restore function can still work as before, but needs to be =
-more
-> > > explicit in what domain to attach the device to.
-> > > That is because detaching the empty domain will reattach the core's d=
-efault
-> > > domain, which is wrong (except for the first "main" core).
-> > >=20
-> > > The RCB temporary buffers are allocated in a dedicated SRAM, each
-> > > core has its own SRAM, so the mapping for each core's SRAM is added i=
-n the
-> > > global domain.
-> > >=20
-> > > Everything else is mapped through the first core's default domain, ma=
-king
-> > > the driver write the mappings on both IOMMU cores.
-> > Just raising an issue with the patch ordering here. I'm worried in a gi=
-t bisect,
-> > the driver will be broken until we apply this last patch. Can we make s=
-ure that
-> > the driver bisects ? (or tell me if I'm wrong)
-> No, you're right. That's also why I mentioned it in the cover letter.=20
-> This commit is also not too big, so I'll merge the last 3 commits and=20
-> adapt the commit message to keep the information from the 3 (the commit=
-=20
-> messages are why I wanted to keep them separate, but there is no good=20
-> way to keep them that way)
-
-
-Unless we can implement everything, but only turn the multicore switch on i=
-n a
-final patch ? Basically removing the code that enable other cores at the en=
-d.
-But I don't want more code just to justify this, the break nice is nice for
-review fwiw, but if squashing is the way, let it be.
-
-Nicolas
-
->=20
-> Detlev.
-> >=20
-> > > Signed-off-by: Detlev Casanova <detlev.casanova@collabora.com>
-> > > ---
-> > > =C2=A0=C2=A0.../media/platform/rockchip/rkvdec/rkvdec-rcb.c=C2=A0=C2=
-=A0=C2=A0 | 21 ++++++-------
-> > > =C2=A0=C2=A0.../media/platform/rockchip/rkvdec/rkvdec-rcb.h=C2=A0=C2=
-=A0=C2=A0 |=C2=A0 6 ++--
-> > > =C2=A0=C2=A0drivers/media/platform/rockchip/rkvdec/rkvdec.c=C2=A0=C2=
-=A0=C2=A0 | 35 +++++++++++++++++-----
-> > > =C2=A0=C2=A0drivers/media/platform/rockchip/rkvdec/rkvdec.h=C2=A0=C2=
-=A0=C2=A0 |=C2=A0 2 +-
-> > > =C2=A0=C2=A04 files changed, 44 insertions(+), 20 deletions(-)
-> > >=20
-> > > diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c b/dr=
-ivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c
-> > > index 190fb7438e8c..977e37cf209b 100644
-> > > --- a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c
-> > > +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.c
-> > > @@ -57,7 +57,7 @@ bool rkvdec_rcb_buf_validate_size(struct rkvdec_ctx=
- *ctx)
-> > > =C2=A0=C2=A0	return ret;
-> > > =C2=A0=C2=A0}
-> > > =C2=A0=20
-> > > -void rkvdec_free_rcb(struct rkvdec_core *core)
-> > > +void rkvdec_free_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *=
-core)
-> > > =C2=A0=C2=A0{
-> > > =C2=A0=C2=A0	struct rkvdec_rcb_config *cfg =3D core->rcb_config;
-> > > =C2=A0=C2=A0	unsigned long virt_addr;
-> > > @@ -76,12 +76,12 @@ void rkvdec_free_rcb(struct rkvdec_core *core)
-> > > =C2=A0=C2=A0		case RKVDEC_ALLOC_SRAM:
-> > > =C2=A0=C2=A0			virt_addr =3D (unsigned long)cfg->rcb_bufs[i].cpu;
-> > > =C2=A0=20
-> > > -			if (core->iommu_domain)
-> > > -				iommu_unmap(core->iommu_domain, virt_addr, rcb_size);
-> > > +			if (rkvdec->iommu_global_domain)
-> > > +				iommu_unmap(rkvdec->iommu_global_domain, virt_addr, rcb_size);
-> > > =C2=A0=C2=A0			gen_pool_free(core->sram_pool, virt_addr, rcb_size);
-> > > =C2=A0=C2=A0			break;
-> > > =C2=A0=C2=A0		case RKVDEC_ALLOC_DMA:
-> > > -			dma_free_coherent(core->dev,
-> > > +			dma_free_coherent(rkvdec->main_core->dev,
-> > > =C2=A0=C2=A0					=C2=A0 rcb_size,
-> > > =C2=A0=C2=A0					=C2=A0 cfg->rcb_bufs[i].cpu,
-> > > =C2=A0=C2=A0					=C2=A0 cfg->rcb_bufs[i].dma);
-> > > @@ -97,7 +97,8 @@ void rkvdec_free_rcb(struct rkvdec_core *core)
-> > > =C2=A0=C2=A0	core->rcb_config =3D NULL;
-> > > =C2=A0=C2=A0}
-> > > =C2=A0=20
-> > > -int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 hei=
-ght,
-> > > +int rkvdec_allocate_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_cor=
-e *core,
-> > > +			u32 width, u32 height,
-> > > =C2=A0=C2=A0			const struct rcb_size_info *size_info,
-> > > =C2=A0=C2=A0			size_t rcb_count)
-> > > =C2=A0=C2=A0{
-> > > @@ -132,7 +133,7 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core,=
- u32 width, u32 height,
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0		/* Try allocating an SRAM buffer */
-> > > =C2=A0=C2=A0		if (core->sram_pool) {
-> > > -			if (core->iommu_domain)
-> > > +			if (rkvdec->iommu_global_domain)
-> > > =C2=A0=C2=A0				rcb_size =3D ALIGN(rcb_size, SZ_4K);
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0			cpu =3D gen_pool_dma_zalloc_align(core->sram_pool,
-> > > @@ -142,11 +143,11 @@ int rkvdec_allocate_rcb(struct rkvdec_core *cor=
-e, u32 width, u32 height,
-> > > =C2=A0=C2=A0		}
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0		/* If an IOMMU is used, map the SRAM address through it=
- */
-> > > -		if (cpu && core->iommu_domain) {
-> > > +		if (cpu && rkvdec->iommu_global_domain) {
-> > > =C2=A0=C2=A0			unsigned long virt_addr =3D (unsigned long)cpu;
-> > > =C2=A0=C2=A0			phys_addr_t phys_addr =3D dma;
-> > > =C2=A0=20
-> > > -			ret =3D iommu_map(core->iommu_domain, virt_addr, phys_addr,
-> > > +			ret =3D iommu_map(rkvdec->iommu_global_domain, virt_addr, phys_ad=
-dr,
-> > > =C2=A0=C2=A0					rcb_size, IOMMU_READ | IOMMU_WRITE, 0);
-> > > =C2=A0=C2=A0			if (ret) {
-> > > =C2=A0=C2=A0				gen_pool_free(core->sram_pool,
-> > > @@ -166,7 +167,7 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core,=
- u32 width, u32 height,
-> > > =C2=A0=C2=A0ram_fallback:
-> > > =C2=A0=C2=A0		/* Fallback to RAM */
-> > > =C2=A0=C2=A0		if (!cpu) {
-> > > -			cpu =3D dma_alloc_coherent(core->dev,
-> > > +			cpu =3D dma_alloc_coherent(rkvdec->main_core->dev,
-> > > =C2=A0=C2=A0						 rcb_size,
-> > > =C2=A0=C2=A0						 &dma,
-> > > =C2=A0=C2=A0						 GFP_KERNEL);
-> > > @@ -189,7 +190,7 @@ int rkvdec_allocate_rcb(struct rkvdec_core *core,=
- u32 width, u32 height,
-> > > =C2=A0=C2=A0	return 0;
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0err_alloc:
-> > > -	rkvdec_free_rcb(core);
-> > > +	rkvdec_free_rcb(rkvdec, core);
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0	return ret;
-> > > =C2=A0=C2=A0}
-> > > diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h b/dr=
-ivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h
-> > > index a12af9b7dc2b..d1149afe7fda 100644
-> > > --- a/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h
-> > > +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-rcb.h
-> > > @@ -8,6 +8,7 @@
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0#include <linux/types.h>
-> > > =C2=A0=20
-> > > +struct rkvdec_dev;
-> > > =C2=A0=C2=A0struct rkvdec_ctx;
-> > > =C2=A0=C2=A0struct rkvdec_core;
-> > > =C2=A0=20
-> > > @@ -21,11 +22,12 @@ struct rcb_size_info {
-> > > =C2=A0=C2=A0	enum rcb_axis axis;
-> > > =C2=A0=C2=A0};
-> > > =C2=A0=20
-> > > -int rkvdec_allocate_rcb(struct rkvdec_core *core, u32 width, u32 hei=
-ght,
-> > > +int rkvdec_allocate_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_cor=
-e *core,
-> > > +			u32 width, u32 height,
-> > > =C2=A0=C2=A0			const struct rcb_size_info *size_info,
-> > > =C2=A0=C2=A0			size_t rcb_count);
-> > > =C2=A0=C2=A0dma_addr_t rkvdec_rcb_buf_dma_addr(struct rkvdec_ctx *ctx=
-, int id);
-> > > =C2=A0=C2=A0size_t rkvdec_rcb_buf_size(struct rkvdec_ctx *ctx, int id=
-);
-> > > =C2=A0=C2=A0int rkvdec_rcb_buf_count(struct rkvdec_ctx *ctx);
-> > > =C2=A0=C2=A0bool rkvdec_rcb_buf_validate_size(struct rkvdec_ctx *ctx)=
-;
-> > > -void rkvdec_free_rcb(struct rkvdec_core *core);
-> > > +void rkvdec_free_rcb(struct rkvdec_dev *rkvdec, struct rkvdec_core *=
-core);
-> > > diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.c b/driver=
-s/media/platform/rockchip/rkvdec/rkvdec.c
-> > > index c2818f1575ef..2930e9b64906 100644
-> > > --- a/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-> > > +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
-> > > @@ -1204,9 +1204,9 @@ static void rkvdec_device_run(void *priv)
-> > > =C2=A0=C2=A0	}
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0	if (!rkvdec_rcb_buf_validate_size(ctx)) {
-> > > -		rkvdec_free_rcb(ctx->core);
-> > > +		rkvdec_free_rcb(ctx->dev, ctx->core);
-> > > =C2=A0=20
-> > > -		ret =3D rkvdec_allocate_rcb(ctx->core,
-> > > +		ret =3D rkvdec_allocate_rcb(ctx->dev, ctx->core,
-> > > =C2=A0=C2=A0					=C2=A0 ctx->decoded_fmt.fmt.pix_mp.width,
-> > > =C2=A0=C2=A0					=C2=A0 ctx->decoded_fmt.fmt.pix_mp.height,
-> > > =C2=A0=C2=A0					=C2=A0 ctx->dev->variant->rcb_sizes,
-> > > @@ -1486,6 +1486,7 @@ static void rkvdec_v4l2_cleanup(struct rkvdec_d=
-ev *rkvdec)
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0static void rkvdec_iommu_restore(struct rkvdec_core *core=
-)
-> > > =C2=A0=C2=A0{
-> > > +	int ret;
-> > > =C2=A0=C2=A0	if (core->empty_domain) {
-> > > =C2=A0=C2=A0		/*
-> > > =C2=A0=C2=A0		 * To rewrite mapping into the attached IOMMU core, att=
-ach a new empty domain that
-> > > @@ -1494,8 +1495,14 @@ static void rkvdec_iommu_restore(struct rkvdec=
-_core *core)
-> > > =C2=A0=C2=A0		 * This is safely done in this interrupt handler to mak=
-e sure no memory get mapped
-> > > =C2=A0=C2=A0		 * through the IOMMU while the empty domain is attached=
-.
-> > > =C2=A0=C2=A0		 */
-> > > -		iommu_attach_device(core->empty_domain, core->dev);
-> > > +		iommu_detach_device(core->curr_ctx->dev->iommu_global_domain, core=
-->dev);
-> > > +		ret =3D iommu_attach_device(core->empty_domain, core->dev);
-> > > +		if (ret)
-> > > +			dev_warn(core->dev, "Cannot attach empty domain: %d\n", ret);
-> > > =C2=A0=C2=A0		iommu_detach_device(core->empty_domain, core->dev);
-> > > +		ret =3D iommu_attach_device(core->curr_ctx->dev->iommu_global_doma=
-in, core->dev);
-> > > +		if (ret)
-> > > +			dev_warn(core->dev, "Cannot attach global domain: %d\n", ret);
-> > > =C2=A0=C2=A0	}
-> > > =C2=A0=C2=A0}
-> > > =C2=A0=20
-> > > @@ -1858,6 +1865,8 @@ static int rkvdec_probe(struct platform_device =
-*pdev)
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0	core =3D &rkvdec->cores[rkvdec->core_count++];
-> > > =C2=A0=20
-> > > +	core->id =3D rkvdec->core_count - 1;
-> > > +
-> > > =C2=A0=C2=A0	platform_set_drvdata(pdev, rkvdec);
-> > > =C2=A0=C2=A0	core->dev =3D &pdev->dev;
-> > > =C2=A0=C2=A0	INIT_DELAYED_WORK(&core->watchdog_work, rkvdec_watchdog_=
-func);
-> > > @@ -1883,12 +1892,24 @@ static int rkvdec_probe(struct platform_devic=
-e *pdev)
-> > > =C2=A0=C2=A0			return PTR_ERR(core->link);
-> > > =C2=A0=C2=A0	}
-> > > =C2=A0=20
-> > > -	core->iommu_domain =3D iommu_get_domain_for_dev(&pdev->dev);
-> > > -	if (core->iommu_domain) {
-> > > +	if (iommu_get_domain_for_dev(&pdev->dev)) {
-> > > =C2=A0=C2=A0		core->empty_domain =3D iommu_paging_domain_alloc(core->=
-dev);
-> > > =C2=A0=20
-> > > -		if (!core->empty_domain)
-> > > +		if (IS_ERR(core->empty_domain))
-> > > =C2=A0=C2=A0			dev_warn(core->dev, "cannot alloc new empty domain\n")=
-;
-> > > +
-> > > +		if (!rkvdec->iommu_global_domain) {
-> > > +			rkvdec->iommu_global_domain =3D iommu_get_domain_for_dev(core->de=
-v);
-> > > +
-> > > +			if (IS_ERR(rkvdec->iommu_global_domain)) {
-> > > +				rkvdec->iommu_global_domain =3D NULL;
-> > > +				dev_warn_once(core->dev, "cannot alloc new global domain\n");
-> > > +			}
-> > > +		}
-> > > +
-> > > +		ret =3D iommu_attach_device(rkvdec->iommu_global_domain, core->dev=
-);
-> > > +		if (ret)
-> > > +			dev_warn(core->dev, "cannot attach global domain to core %d\n", c=
-ore->id);
-> > > =C2=A0=C2=A0	}
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0	ret =3D dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(3=
-2));
-> > > @@ -1961,7 +1982,7 @@ static void rkvdec_remove(struct platform_devic=
-e *pdev)
-> > > =C2=A0=C2=A0		if (rkvdec->cores[i].empty_domain)
-> > > =C2=A0=C2=A0			iommu_domain_free(rkvdec->cores[i].empty_domain);
-> > > =C2=A0=20
-> > > -		rkvdec_free_rcb(&rkvdec->cores[i]);
-> > > +		rkvdec_free_rcb(rkvdec, &rkvdec->cores[i]);
-> > > =C2=A0=C2=A0	}
-> > > =C2=A0=C2=A0}
-> > > =C2=A0=20
-> > > diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.h b/driver=
-s/media/platform/rockchip/rkvdec/rkvdec.h
-> > > index 4f042a367dc0..ccd766b220c7 100644
-> > > --- a/drivers/media/platform/rockchip/rkvdec/rkvdec.h
-> > > +++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.h
-> > > @@ -135,7 +135,6 @@ struct rkvdec_core {
-> > > =C2=A0=C2=A0	void __iomem *link;
-> > > =C2=A0=C2=A0	struct delayed_work watchdog_work;
-> > > =C2=A0=C2=A0	struct gen_pool *sram_pool;
-> > > -	struct iommu_domain *iommu_domain;
-> > > =C2=A0=C2=A0	struct iommu_domain *empty_domain;
-> > > =C2=A0=C2=A0	struct rkvdec_rcb_config *rcb_config;
-> > > =C2=A0=C2=A0	struct rkvdec_ctx *curr_ctx;
-> > > @@ -155,6 +154,7 @@ struct rkvdec_dev {
-> > > =C2=A0=C2=A0	unsigned int available_core_count;
-> > > =C2=A0=C2=A0	spinlock_t cores_lock; /* serializes core list access */
-> > > =C2=A0=C2=A0	struct rkvdec_core *main_core;
-> > > +	struct iommu_domain *iommu_global_domain;
-> > > =C2=A0=C2=A0};
-> > > =C2=A0=20
-> > > =C2=A0=C2=A0struct rkvdec_ctx {
-
---=-oRdpf3vSzts/F/hutoEG
-Content-Type: application/pgp-signature; name="signature.asc"
-Content-Description: This is a digitally signed message part
-Content-Transfer-Encoding: 7bit
-
------BEGIN PGP SIGNATURE-----
-
-iHUEABYKAB0WIQTvDVKBFcTDwhoEbxLZQZRRKWBy9AUCadfErQAKCRDZQZRRKWBy
-9Pn/AP9pfr2vN+orSi7oPIBk4oXz2hHxU/tyhhj0mADYVEsFdAD/ehYDStpNd56v
-9rN/y/2K/yzi6YC3Sl9puEs8mjZO7Ak=
-=ukm5
------END PGP SIGNATURE-----
-
---=-oRdpf3vSzts/F/hutoEG--
-
