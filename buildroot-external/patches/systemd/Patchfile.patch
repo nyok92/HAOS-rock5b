@@ -1,0 +1,35 @@
+--- hostnamed.c	2026-09-08 00:51:09.634018139 +0200
++++ hostnamed.c2	2026-09-08 01:01:41.114431203 +0200
+@@ -22,6 +22,7 @@
+ #include "device-private.h"
+ #include "env-file.h"
+ #include "env-util.h"
++#include "fd-util.h"
+ #include "extract-word.h"
+ #include "fileio.h"
+ #include "hashmap.h"
+@@ -797,6 +798,7 @@
+ 
+ static int context_write_data_static_hostname(Context *c) {
+         _cleanup_(unset_statp) struct stat *s = NULL;
++        _cleanup_close_ int fd = -1;
+         int r;
+ 
+         assert(c);
+@@ -813,10 +815,15 @@
+                 return 0;
+         }
+ 
+-        r = write_string_file(etc_hostname(), c->data[PROP_STATIC_HOSTNAME], WRITE_STRING_FILE_CREATE|WRITE_STRING_FILE_ATOMIC|WRITE_STRING_FILE_LABEL);
++        r = write_string_file(etc_hostname(), c->data[PROP_STATIC_HOSTNAME], WRITE_STRING_FILE_CREATE|WRITE_STRING_FILE_TRUNCATE|WRITE_STRING_FILE_ATOMIC|WRITE_STRING_FILE_LABEL);
+         if (r < 0)
+                 return r;
+ 
++        /* Cannot use WRITE_STRING_FILE_SYNC as it tries to sync parent dir */
++        fd = open("/etc/hostname", O_RDONLY|O_CLOEXEC);
++        if (fsync(fd) < 0)
++                return -errno;
++
+         TAKE_PTR(s);
+         return 0;
+ }
