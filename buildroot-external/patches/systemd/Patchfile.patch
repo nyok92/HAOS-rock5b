@@ -1,5 +1,11 @@
---- hostnamed.c	2026-09-08 00:51:09.634018139 +0200
-+++ hostnamed.c2	2026-09-08 01:01:41.114431203 +0200
+---
+ src/hostname/hostnamed.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/hostname/hostnamed.c b/src/hostname/hostnamed.c
+index bd535ddc4d..0ec57eb2a7 100644
+--- a/src/hostname/hostnamed.c
++++ b/src/hostname/hostnamed.c
 @@ -22,6 +22,7 @@
  #include "device-private.h"
  #include "env-file.h"
