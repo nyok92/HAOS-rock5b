@@ -94,9 +94,7 @@ done
 if test -n "${bootargs}"; then
   run storebootstate
 else
-  echo "No valid slot found, resetting tries to 3"
-  setenv BOOT_A_LEFT 3
-  setenv BOOT_B_LEFT 3
+  echo "Failed to load kernel from any slot, resetting..."
   run storebootstate
   reset
 fi
