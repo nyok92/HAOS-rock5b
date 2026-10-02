@@ -395,13 +395,6 @@ else
 FFMPEG_CUSTOM_CONF_OPTS += --disable-fontconfig
 endif
 
-ifeq ($(BR2_PACKAGE_HARFBUZZ),y)
-FFMPEG_CUSTOM_CONF_OPTS += --enable-libharfbuzz
-FFMPEG_CUSTOM_DEPENDENCIES += harfbuzz
-else
-FFMPEG_CUSTOM_CONF_OPTS += --disable-libharfbuzz
-endif
-
 ifeq ($(BR2_PACKAGE_LIBFRIBIDI),y)
 FFMPEG_CUSTOM_CONF_OPTS += --enable-libfribidi
 FFMPEG_CUSTOM_DEPENDENCIES += libfribidi
