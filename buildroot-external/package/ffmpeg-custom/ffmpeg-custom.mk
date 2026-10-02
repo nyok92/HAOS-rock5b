@@ -1,5 +1,5 @@
-FFMPEG_CUSTOM_VERSION = 5d5bbd001ba027d0b22c51325570b28f52d8a6f5       # tag or full commit hash
-FFMPEG_CUSTOM_SITE = https://github.com/jernejsk/FFmpeg.git
+FFMPEG_CUSTOM_VERSION = b57fbbe50c9b2656fad86a1a7eeabfd2b2a50935       # tag or full commit hash
+FFMPEG_CUSTOM_SITE = https://github.com/Kwiboo/FFmpeg.git
 FFMPEG_CUSTOM_SITE_METHOD = git
 FFMPEG_CUSTOM_INSTALL_STAGING = YES
 FFMPEG_CUSTOM_LICENSE = LGPL-2.1+
