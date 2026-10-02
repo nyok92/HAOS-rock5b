@@ -20,6 +20,10 @@ FFMPEG_CUSTOM_CONF_OPTS = \
 	--enable-pic \
 	--pkg-config="$(PKG_CONFIG_HOST_BINARY)"
 
+ifeq ($(BR2_PACKAGE_HAS_UDEV),y)
+FFMPEG_DEPENDENCIES += udev
+endif
+
 # FFmpeg's configure is not autotools-generated, so it needs a custom configure step
 define FFMPEG_CUSTOM_CONFIGURE_CMDS
 	cd $(FFMPEG_CUSTOM_SRCDIR) && rm -rf config.cache && \
