@@ -14,7 +14,7 @@ config BR2_PACKAGE_FFMPEG_CUSTOM_ARCH_SUPPORTS
 	depends on !(BR2_or1k && !BR2_TOOLCHAIN_GCC_AT_LEAST_9)
 
 menuconfig BR2_PACKAGE_FFMPEG_CUSTOM
-	bool "ffmpeg"
+	bool "ffmpeg-custom"
 	depends on BR2_PACKAGE_FFMPEG_CUSTOM_ARCH_SUPPORTS
 	depends on BR2_TOOLCHAIN_HAS_THREADS
 	help
