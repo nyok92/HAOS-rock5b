@@ -197,12 +197,6 @@ else
 FFMPEG_CUSTOM_CONF_OPTS += --disable-zlib
 endif
 
-ifeq ($(BR2_PACKAGE_FFMPEG_CUSTOM_POSTPROC),y)
-FFMPEG_CUSTOM_CONF_OPTS += --enable-postproc
-else
-FFMPEG_CUSTOM_CONF_OPTS += --disable-postproc
-endif
-
 ifeq ($(BR2_PACKAGE_BZIP2),y)
 FFMPEG_CUSTOM_CONF_OPTS += --enable-bzlib
 FFMPEG_CUSTOM_DEPENDENCIES += bzip2
