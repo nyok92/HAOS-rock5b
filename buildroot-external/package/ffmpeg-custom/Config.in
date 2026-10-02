@@ -25,27 +25,6 @@ menuconfig BR2_PACKAGE_FFMPEG_CUSTOM
 
 if BR2_PACKAGE_FFMPEG_CUSTOM
 
-config BR2_PACKAGE_FFMPEG_CUSTOM_VERSION
-    string "ffmpeg version"
-	help
-	   tarball ffmpeg version
-
-config BR2_PACKAGE_FFMPEG_CUSTOM_CUSTOM_GIT
-	bool
-	default n
-	help
-	   allow use of git source to build package
-
-config BR2_PACKAGE_FFMPEG_CUSTOM_CUSTOM_REPO_URL
-    string "git repo url"
-	help
-	   url of the git source tree
-
-config BR2_PACKAGE_FFMPEG_CUSTOM_CUSTOM_REPO_VERSION
-        string
-	help
-	   some_commit_id_or_tag_or_branch_name
-
 config BR2_PACKAGE_FFMPEG_CUSTOM_GPL
 	bool "Enable GPL code"
 	help
