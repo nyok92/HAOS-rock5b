@@ -45,11 +45,9 @@ FFMPEG_CUSTOM_CONF_OPTS = \
 
 FFMPEG_CUSTOM_DEPENDENCIES += host-pkgconf
 
-FFMPEG_CUSTOM_CONF_OPTS += --enable-v4l2-request
-
 ifeq ($(BR2_PACKAGE_HAS_UDEV),y)
 FFMPEG_CUSTOM_DEPENDENCIES += udev
-FFMPEG_CUSTOM_CONF_OPTS += --enable-libudev
+FFMPEG_CUSTOM_CONF_OPTS += --enable-libudev --enable-v4l2-request
 endif
 
 ifeq ($(BR2_PACKAGE_FFMPEG_CUSTOM_GPL),y)
@@ -548,11 +546,6 @@ else ifeq ($(BR2_POWERPC_CPU_HAS_VSX):$(BR2_powerpc64le),y:y)
 FFMPEG_CUSTOM_CONF_OPTS += --enable-altivec
 else
 FFMPEG_CUSTOM_CONF_OPTS += --disable-altivec
-endif
-
-# Fix build failure on several missing assembly instructions
-ifeq ($(BR2_RISCV_32),y)
-FFMPEG_CUSTOM_CONF_OPTS += --disable-rvv --disable-asm
 endif
 
 # Uses __atomic_fetch_add_4
