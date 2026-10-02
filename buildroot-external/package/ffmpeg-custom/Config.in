@@ -17,6 +17,7 @@ menuconfig BR2_PACKAGE_FFMPEG_CUSTOM
 	bool "ffmpeg-custom"
 	depends on BR2_PACKAGE_FFMPEG_CUSTOM_ARCH_SUPPORTS
 	depends on BR2_TOOLCHAIN_HAS_THREADS
+	select BR2_PACKAGE_LIBDRM
 	help
 	  FFmpeg is a complete, cross-platform solution to record,
 	  convert and stream audio and video.
