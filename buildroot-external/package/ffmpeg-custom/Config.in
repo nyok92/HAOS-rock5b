@@ -1,0 +1,5 @@
+config BR2_PACKAGE_FFMPEG_CUSTOM
+	bool "ffmpeg-custom"
+	select BR2_PACKAGE_HOST_PKGCONF   # pkgconf is already default, harmless
+	help
+	  FFmpeg built from a custom git repository.
