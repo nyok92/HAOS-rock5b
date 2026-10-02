@@ -74,12 +74,6 @@ config BR2_PACKAGE_FFMPEG_CUSTOM_XCBGRAB
 	help
 	  X11 screen grabbing using libxcb.
 
-config BR2_PACKAGE_FFMPEG_CUSTOM_POSTPROC
-	bool "Build libpostproc"
-	depends on BR2_PACKAGE_FFMPEG_CUSTOM_GPL
-	help
-	  Postproc is a library of video postprocessing routines.
-
 config BR2_PACKAGE_FFMPEG_CUSTOM_SWSCALE
 	bool "Build libswscale"
 	help
