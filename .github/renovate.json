@@ -7,6 +7,7 @@
 
   "semanticCommits": "disabled",
   "labels": ["dependencies"],
+  "commitMessageExtra": "to {{#if isPinDigest}}{{{newDigestShort}}}{{else}}{{#if isSingleVersion}}{{prettyNewVersion}}{{else}}{{#if newValue}}{{{newValue}}}{{else}}{{{newDigestShort}}}{{/if}}{{/if}}{{/if}}",
 
   "customDatasources": {
     "kernel-org": {
@@ -97,6 +98,7 @@
       "matchDatasources": ["custom.kernel-org"],
       "groupName": "Linux kernel",
       "groupSlug": "linux-kernel",
+      "rebaseWhen": "never",
       "commitMessagePrefix": "Linux:",
       "commitMessageAction": "Update",
       "commitMessageTopic": "kernel",
@@ -104,6 +106,7 @@
       "prBodyNotes": [
         "* https://cdn.kernel.org/pub/linux/kernel/v{{newMajor}}.x/ChangeLog-{{newVersion}}"
       ],
+      "commitBody": "* https://cdn.kernel.org/pub/linux/kernel/v{{newMajor}}.x/ChangeLog-{{newVersion}}",
       "addLabels": ["board/generic-aarch64", "board/generic-x86-64", "board/green", "board/khadas", "board/odroid", "board/ova", "linux"]
     },
     {
@@ -118,7 +121,30 @@
       "commitMessageTopic": "OS Agent",
       "commitMessageAction": "Bump",
       "commitMessageExtra": "to v{{newVersion}}",
+      "fetchChangeLogs": "branch",
+      "commitBody": "Full changelog:\n{{#if logJSON.versions}}{{#each logJSON.versions}}* https://github.com/home-assistant/os-agent/releases/tag/{{version}}\n{{/each}}{{else}}* https://github.com/home-assistant/os-agent/releases/tag/{{newVersion}}{{/if}}",
       "addLabels": ["os"]
+    },
+    {
+      "description": "tempio, with links to the release notes",
+      "matchPackageNames": ["home-assistant/tempio"],
+      "commitMessageTopic": "tempio",
+      "fetchChangeLogs": "branch",
+      "commitBody": "Full changelog:\n{{#if logJSON.versions}}{{#each logJSON.versions}}* https://github.com/home-assistant/tempio/releases/tag/{{version}}\n{{/each}}{{else}}* https://github.com/home-assistant/tempio/releases/tag/{{newVersion}}{{/if}}"
+    },
+    {
+      "description": "Python packages of the tests, in the same format as the manual updates",
+      "matchManagers": ["pip_requirements"],
+      "matchFileNames": ["tests/**"],
+      "commitMessagePrefix": "Tests:",
+      "commitMessageAction": "update",
+      "commitMessageTopic": "{{depName}}"
+    },
+    {
+      "description": "labgrid, with links to the release notes. Its release tags have a v prefix.",
+      "matchPackageNames": ["labgrid"],
+      "fetchChangeLogs": "branch",
+      "commitBody": "Full changelog:\n{{#if logJSON.versions}}{{#each logJSON.versions}}* https://github.com/labgrid-project/labgrid/releases/tag/v{{version}}\n{{/each}}{{else}}* https://github.com/labgrid-project/labgrid/releases/tag/v{{newVersion}}{{/if}}"
     }
   ]
 }
