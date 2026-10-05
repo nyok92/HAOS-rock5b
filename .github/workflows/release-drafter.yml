@@ -3,6 +3,7 @@ name: Release Drafter
 on:
   push:
     branches:
+      - rock5b
       - dev
       - rel-*
 
