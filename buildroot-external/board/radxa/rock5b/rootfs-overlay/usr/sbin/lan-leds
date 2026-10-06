@@ -10,17 +10,17 @@ modprobe ledtrig-netdev
 L=/sys/class/leds/$IF-1::lan
 echo netdev > $L/trigger
 echo $IF > $L/device_name
-echo 0 > $L/rx
-echo 0 > $L/tx
-echo 1 > $L/link_100
-echo 1 > $L/link_1000
-echo 1 > $L/link_2500
+echo 1 > $L/rx
+echo 1 > $L/tx
+echo 0 > $L/link_100
+echo 0 > $L/link_1000
+echo 0 > $L/link_2500
 
 R=/sys/class/leds/$IF-2::lan
 echo netdev > $R/trigger
 echo $IF > $R/device_name
-echo 0 > $R/link_100
-echo 0 > $R/link_1000
-echo 0 > $R/link_2500
-echo 1 > $R/rx
-echo 1 > $R/tx
+echo 1 > $R/link_100
+echo 1 > $R/link_1000
+echo 1 > $R/link_2500
+echo 0 > $R/rx
+echo 0 > $R/tx
