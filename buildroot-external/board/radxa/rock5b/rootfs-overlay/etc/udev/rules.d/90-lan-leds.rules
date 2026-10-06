@@ -1,0 +1,1 @@
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="enP4p65s0-3::lan", RUN+="/usr/local/bin/lan-leds.sh"
