@@ -1,0 +1,11 @@
+[Unit]
+Description=Configure RTL8125 LEDs
+After=sys-subsystem-net-devices-enP4p65s0.device
+Wants=sys-subsystem-net-devices-enP4p65s0.device
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/lan-leds
+
+[Install]
+WantedBy=multi-user.target
