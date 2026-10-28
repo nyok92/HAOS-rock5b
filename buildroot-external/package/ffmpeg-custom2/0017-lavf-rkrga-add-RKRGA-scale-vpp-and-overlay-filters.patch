@@ -1,26 +1,25 @@
-From d3398a38b5a636f23e9db75b061b499b1852d1bb Mon Sep 17 00:00:00 2001
+From 9b7ff9c8a3aebffba4ef95fa82c7e220d5d77abb Mon Sep 17 00:00:00 2001
 From: nyanmisaka <nst799610810@gmail.com>
-Date: Tue, 24 Mar 2026 16:56:21 +0800
-Subject: [PATCH 4/4] lavf/rkrga: add RKRGA scale, vpp and overlay filters
+Date: Sun, 25 Oct 2026 16:52:39 +0800
+Subject: [PATCH] lavf/rkrga: add RKRGA scale, vpp and overlay filters
 
 Signed-off-by: nyanmisaka <nst799610810@gmail.com>
-(cherry picked from commit 9e3ebe0f7af20e94389dabd7440aae587acd04b1)
 ---
  configure                      |   10 +
  libavfilter/Makefile           |    5 +
  libavfilter/allfilters.c       |    3 +
- libavfilter/rkrga_common.c     | 1447 ++++++++++++++++++++++++++++++++
+ libavfilter/rkrga_common.c     | 1453 ++++++++++++++++++++++++++++++++
  libavfilter/rkrga_common.h     |  133 +++
  libavfilter/vf_overlay_rkrga.c |  377 +++++++++
  libavfilter/vf_vpp_rkrga.c     |  592 +++++++++++++
- 7 files changed, 2567 insertions(+)
+ 7 files changed, 2573 insertions(+)
  create mode 100644 libavfilter/rkrga_common.c
  create mode 100644 libavfilter/rkrga_common.h
  create mode 100644 libavfilter/vf_overlay_rkrga.c
  create mode 100644 libavfilter/vf_vpp_rkrga.c
 
 diff --git a/configure b/configure
-index 496bef71c0..754cdd807b 100755
+index 2dec4ea47a7..ca8521f7d88 100755
 --- a/configure
 +++ b/configure
 @@ -367,6 +367,7 @@ External library support:
@@ -29,9 +28,9 @@ index 496bef71c0..754cdd807b 100755
    --enable-rkmpp           enable Rockchip Media Process Platform code [no]
 +  --enable-rkrga           enable Rockchip 2D Raster Graphic Acceleration code [no]
    --disable-v4l2-m2m       disable V4L2 mem2mem code [autodetect]
-   --disable-v4l2-request   disable V4L2 Request API code [autodetect]
    --disable-vaapi          disable Video Acceleration API (mainly Unix/Intel) code [autodetect]
-@@ -2017,6 +2018,7 @@ EXTERNAL_LIBRARY_VERSION3_LIST="
+   --disable-vdpau          disable Nvidia Video Decode and Presentation API for Unix code [autodetect]
+@@ -2016,6 +2017,7 @@ EXTERNAL_LIBRARY_VERSION3_LIST="
      libvo_amrwbenc
      mbedtls
      rkmpp
@@ -39,7 +38,7 @@ index 496bef71c0..754cdd807b 100755
  "
  
  EXTERNAL_LIBRARY_GPLV3_LIST="
-@@ -4193,6 +4195,7 @@ libopencolorio_filter_deps="libopencolorio"
+@@ -4176,6 +4178,7 @@ libopencolorio_filter_deps="libopencolorio"
  overlay_opencl_filter_deps="opencl"
  overlay_qsv_filter_deps="libmfx"
  overlay_qsv_filter_select="qsvvpp"
@@ -47,7 +46,7 @@ index 496bef71c0..754cdd807b 100755
  overlay_vaapi_filter_deps="vaapi VAProcPipelineCaps_blend_flags"
  overlay_vulkan_filter_deps="vulkan spirv_library"
  owdenoise_filter_deps="gpl"
-@@ -4217,6 +4220,7 @@ sr_amf_filter_deps="amf"
+@@ -4200,6 +4203,7 @@ sr_amf_filter_deps="amf"
  vpp_amf_filter_deps="amf"
  scale_qsv_filter_deps="libmfx"
  scale_qsv_filter_select="qsvvpp"
@@ -55,7 +54,7 @@ index 496bef71c0..754cdd807b 100755
  scdet_filter_select="scene_sad"
  scdet_vulkan_filter_deps="vulkan spirv_library"
  select_filter_select="scene_sad"
-@@ -4261,6 +4265,7 @@ scale_vt_filter_deps="videotoolbox VTPixelTransferSessionCreate"
+@@ -4244,6 +4248,7 @@ scale_vt_filter_deps="videotoolbox VTPixelTransferSessionCreate"
  scale_vulkan_filter_deps="vulkan spirv_compiler spirv_library"
  vpp_qsv_filter_deps="libmfx"
  vpp_qsv_filter_select="qsvvpp"
@@ -63,7 +62,7 @@ index 496bef71c0..754cdd807b 100755
  xfade_opencl_filter_deps="opencl"
  xfade_vulkan_filter_deps="vulkan spirv_library"
  yadif_cuda_filter_deps="ffnvcodec"
-@@ -7519,6 +7524,11 @@ enabled rkmpp             && { require_pkg_config rkmpp "rockchip_mpp >= 1.3.9"
+@@ -7510,6 +7515,11 @@ enabled rkmpp             && { require_pkg_config rkmpp "rockchip_mpp >= 1.3.9"
                                 { enabled libdrm ||
                                   die "ERROR: rkmpp requires --enable-libdrm"; }
                               }
@@ -76,7 +75,7 @@ index 496bef71c0..754cdd807b 100755
  
  if enabled gcrypt; then
 diff --git a/libavfilter/Makefile b/libavfilter/Makefile
-index a530cfae29..d74d5c0aaf 100644
+index 750632709ef..c4353209386 100644
 --- a/libavfilter/Makefile
 +++ b/libavfilter/Makefile
 @@ -32,6 +32,7 @@ OBJS-$(HAVE_THREADS)                         += pthread.o
@@ -95,7 +94,7 @@ index a530cfae29..d74d5c0aaf 100644
  OBJS-$(CONFIG_OVERLAY_VAAPI_FILTER)          += vf_overlay_vaapi.o framesync.o vaapi_vpp.o
  OBJS-$(CONFIG_OVERLAY_VULKAN_FILTER)         += vf_overlay_vulkan.o vulkan.o vulkan_filter.o
  OBJS-$(CONFIG_OWDENOISE_FILTER)              += vf_owdenoise.o
-@@ -477,6 +479,7 @@ OBJS-$(CONFIG_SCALE_CUDA_FILTER)             += vf_scale_cuda.o scale_eval.o \
+@@ -477,6 +479,7 @@ OBJS-$(CONFIG_SCALE_CUDA_FILTER)             += vf_scale_cuda.o scale_eval.o sca
                                                  vf_scale_cuda.ptx.o cuda/load_helper.o
  OBJS-$(CONFIG_SCALE_NPP_FILTER)              += vf_scale_npp.o scale_eval.o
  OBJS-$(CONFIG_SCALE_QSV_FILTER)              += vf_vpp_qsv.o
@@ -120,7 +119,7 @@ index a530cfae29..d74d5c0aaf 100644
  SKIPHEADERS-$(CONFIG_VULKAN)                 += vulkan_filter.h
  SKIPHEADERS-$(CONFIG_SCALE_CUDA_FILTER)      += vf_scale_cuda.h
 diff --git a/libavfilter/allfilters.c b/libavfilter/allfilters.c
-index e26859e159..8e3aa12c38 100644
+index e26859e1591..8e3aa12c385 100644
 --- a/libavfilter/allfilters.c
 +++ b/libavfilter/allfilters.c
 @@ -396,6 +396,7 @@ extern const FFFilter ff_vf_ocio;
@@ -149,10 +148,10 @@ index e26859e159..8e3aa12c38 100644
  extern const FFFilter ff_vf_waveform;
 diff --git a/libavfilter/rkrga_common.c b/libavfilter/rkrga_common.c
 new file mode 100644
-index 0000000000..9fd78312e7
+index 00000000000..8b17b236937
 --- /dev/null
 +++ b/libavfilter/rkrga_common.c
-@@ -0,0 +1,1447 @@
+@@ -0,0 +1,1453 @@
 +/*
 + * Copyright (c) 2023 NyanMisaka
 + *
@@ -1024,8 +1023,14 @@ index 0000000000..9fd78312e7
 +    if (!src || !dst)
 +        return AVERROR(EINVAL);
 +
-+    scale_ratio_w = (float)dst->act_w / (float)src->act_w;
-+    scale_ratio_h = (float)dst->act_h / (float)src->act_h;
++    if ((src->rotate_mode & 0x04) == 0x04 /* HAL_TRANSFORM_ROT_90 */ ||
++        (src->rotate_mode & 0x07) == 0x07 /* HAL_TRANSFORM_ROT_270 */) {
++        scale_ratio_w = (float)dst->act_h / (float)src->act_w;
++        scale_ratio_h = (float)dst->act_w / (float)src->act_h;
++    } else {
++        scale_ratio_w = (float)dst->act_w / (float)src->act_w;
++        scale_ratio_h = (float)dst->act_h / (float)src->act_h;
++    }
 +
 +    /* P010 requires RGA3 */
 +    if (!r->has_rga3 &&
@@ -1602,7 +1607,7 @@ index 0000000000..9fd78312e7
 +}
 diff --git a/libavfilter/rkrga_common.h b/libavfilter/rkrga_common.h
 new file mode 100644
-index 0000000000..8da2320c15
+index 00000000000..8da2320c15a
 --- /dev/null
 +++ b/libavfilter/rkrga_common.h
 @@ -0,0 +1,133 @@
@@ -1741,7 +1746,7 @@ index 0000000000..8da2320c15
 +#endif /* AVFILTER_RKRGA_COMMON_H */
 diff --git a/libavfilter/vf_overlay_rkrga.c b/libavfilter/vf_overlay_rkrga.c
 new file mode 100644
-index 0000000000..e34a63b9e1
+index 00000000000..e34a63b9e1b
 --- /dev/null
 +++ b/libavfilter/vf_overlay_rkrga.c
 @@ -0,0 +1,377 @@
@@ -2124,7 +2129,7 @@ index 0000000000..e34a63b9e1
 +};
 diff --git a/libavfilter/vf_vpp_rkrga.c b/libavfilter/vf_vpp_rkrga.c
 new file mode 100644
-index 0000000000..bf05222633
+index 00000000000..bf052226337
 --- /dev/null
 +++ b/libavfilter/vf_vpp_rkrga.c
 @@ -0,0 +1,592 @@
