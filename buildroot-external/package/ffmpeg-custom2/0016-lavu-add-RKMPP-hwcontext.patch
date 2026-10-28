@@ -1,28 +1,27 @@
-From b4974559a1545080f8f9f7ad0e8276eb4330c269 Mon Sep 17 00:00:00 2001
+From dd41f61a3affdef5b120e3963950db734638bbf6 Mon Sep 17 00:00:00 2001
 From: nyanmisaka <nst799610810@gmail.com>
-Date: Sun, 8 Mar 2026 15:01:58 +0800
-Subject: [PATCH 3/4] lavu: add RKMPP hwcontext
+Date: Sun, 25 Oct 2026 16:48:25 +0800
+Subject: [PATCH] lavu: add RKMPP hwcontext
 
 Signed-off-by: nyanmisaka <nst799610810@gmail.com>
 Co-authored-by: boogie <boogiepop@gmx.com>
-(cherry picked from commit c468e9fdb545329253887960e20c2e3e05cb6b27)
 ---
  configure                      |   4 +-
  libavutil/Makefile             |   3 +
  libavutil/hwcontext.c          |   4 +
  libavutil/hwcontext.h          |   1 +
  libavutil/hwcontext_internal.h |   1 +
- libavutil/hwcontext_rkmpp.c    | 603 +++++++++++++++++++++++++++++++++
+ libavutil/hwcontext_rkmpp.c    | 607 +++++++++++++++++++++++++++++++++
  libavutil/hwcontext_rkmpp.h    | 153 +++++++++
- 7 files changed, 767 insertions(+), 2 deletions(-)
+ 7 files changed, 771 insertions(+), 2 deletions(-)
  create mode 100644 libavutil/hwcontext_rkmpp.c
  create mode 100644 libavutil/hwcontext_rkmpp.h
 
 diff --git a/configure b/configure
-index 3d4009f348..496bef71c0 100755
+index 86a2437265f..2dec4ea47a7 100755
 --- a/configure
 +++ b/configure
-@@ -4318,7 +4318,7 @@ avfilter_deps="avutil"
+@@ -4301,7 +4301,7 @@ avfilter_deps="avutil"
  avfilter_suggest="libm stdatomic zlib spirv_library"
  avformat_deps="avcodec avutil"
  avformat_suggest="libm network zlib stdatomic"
@@ -31,7 +30,7 @@ index 3d4009f348..496bef71c0 100755
  swresample_deps="avutil"
  swresample_suggest="libm libsoxr stdatomic"
  swscale_deps="avutil"
-@@ -7515,7 +7515,7 @@ enabled openssl           && { { check_pkg_config openssl "openssl >= 3.0.0" ope
+@@ -7506,7 +7506,7 @@ enabled openssl           && { { check_pkg_config openssl "openssl >= 3.0.0" ope
                                 check_lib openssl openssl/ssl.h DTLS_get_data_mtu -lssl -lcrypto -lws2_32 -lgdi32 ||
                                 die "ERROR: openssl (>= 1.1.1) not found"; }
  enabled pocketsphinx      && require_pkg_config pocketsphinx pocketsphinx pocketsphinx/pocketsphinx.h ps_init
@@ -41,7 +40,7 @@ index 3d4009f348..496bef71c0 100755
                                   die "ERROR: rkmpp requires --enable-libdrm"; }
                               }
 diff --git a/libavutil/Makefile b/libavutil/Makefile
-index fa161b9bc5..a64a72a1ec 100644
+index c5241895ff5..2ae601018b3 100644
 --- a/libavutil/Makefile
 +++ b/libavutil/Makefile
 @@ -52,6 +52,7 @@ HEADERS = adler32.h                                                     \
@@ -49,40 +48,40 @@ index fa161b9bc5..a64a72a1ec 100644
            hwcontext_opencl.h                                            \
            hwcontext_oh.h                                                \
 +          hwcontext_rkmpp.h                                             \
-           hwcontext_v4l2request.h                                       \
            hwcontext_vaapi.h                                             \
            hwcontext_videotoolbox.h                                      \
-@@ -215,6 +216,7 @@ OBJS-$(CONFIG_MEDIACODEC)               += hwcontext_mediacodec.o
+           hwcontext_vdpau.h                                             \
+@@ -214,6 +215,7 @@ OBJS-$(CONFIG_MEDIACODEC)               += hwcontext_mediacodec.o
  OBJS-$(CONFIG_OHCODEC)                  += hwcontext_oh.o
  OBJS-$(CONFIG_OPENCL)                   += hwcontext_opencl.o
  OBJS-$(CONFIG_QSV)                      += hwcontext_qsv.o
 +OBJS-$(CONFIG_RKMPP)                    += hwcontext_rkmpp.o
- OBJS-$(CONFIG_V4L2_REQUEST)             += hwcontext_v4l2request.o
  OBJS-$(CONFIG_VAAPI)                    += hwcontext_vaapi.o
  OBJS-$(CONFIG_VIDEOTOOLBOX)             += hwcontext_videotoolbox.o
-@@ -247,6 +249,7 @@ SKIPHEADERS-$(CONFIG_AMF)              += hwcontext_amf.h               \
+ OBJS-$(CONFIG_VDPAU)                    += hwcontext_vdpau.o
+@@ -245,6 +247,7 @@ SKIPHEADERS-$(CONFIG_AMF)              += hwcontext_amf.h               \
                                            hwcontext_amf_internal.h
  SKIPHEADERS-$(CONFIG_QSV)              += hwcontext_qsv.h
  SKIPHEADERS-$(CONFIG_OPENCL)           += hwcontext_opencl.h
 +SKIPHEADERS-$(CONFIG_RKMPP)            += hwcontext_rkmpp.h
- SKIPHEADERS-$(CONFIG_V4L2_REQUEST)     += hwcontext_v4l2request.h       \
-                                           hwcontext_v4l2request_internal.h
  SKIPHEADERS-$(CONFIG_VAAPI)            += hwcontext_vaapi.h
+ SKIPHEADERS-$(CONFIG_VIDEOTOOLBOX)     += hwcontext_videotoolbox.h
+ SKIPHEADERS-$(CONFIG_VDPAU)            += hwcontext_vdpau.h
 diff --git a/libavutil/hwcontext.c b/libavutil/hwcontext.c
-index 7f93d90c8e..4091fae83f 100644
+index 83bd7457e8e..6cdee7118f8 100644
 --- a/libavutil/hwcontext.c
 +++ b/libavutil/hwcontext.c
-@@ -72,6 +72,9 @@ static const HWContextType * const hw_table[] = {
+@@ -71,6 +71,9 @@ static const HWContextType * const hw_table[] = {
+ #endif
  #if CONFIG_OHCODEC
      &ff_hwcontext_type_oh,
- #endif
++#endif
 +#if CONFIG_RKMPP
 +    &ff_hwcontext_type_rkmpp,
-+#endif
- #if CONFIG_V4L2_REQUEST
-     &ff_hwcontext_type_v4l2request,
  #endif
-@@ -94,6 +97,7 @@ static const char *const hw_type_names[] = {
+     NULL,
+ };
+@@ -90,6 +93,7 @@ static const char *const hw_type_names[] = {
      [AV_HWDEVICE_TYPE_VULKAN] = "vulkan",
      [AV_HWDEVICE_TYPE_AMF] = "amf",
      [AV_HWDEVICE_TYPE_OHCODEC] = "ohcodec",
@@ -91,7 +90,7 @@ index 7f93d90c8e..4091fae83f 100644
  
  typedef struct FFHWDeviceContext {
 diff --git a/libavutil/hwcontext.h b/libavutil/hwcontext.h
-index 88e47cc7f5..5465fac546 100644
+index 29374cf0a7e..e83c79162be 100644
 --- a/libavutil/hwcontext.h
 +++ b/libavutil/hwcontext.h
 @@ -41,6 +41,7 @@ enum AVHWDeviceType {
@@ -99,14 +98,14 @@ index 88e47cc7f5..5465fac546 100644
      /* OpenHarmony Codec device */
      AV_HWDEVICE_TYPE_OHCODEC,
 +    AV_HWDEVICE_TYPE_RKMPP,
-     AV_HWDEVICE_TYPE_V4L2REQUEST,
  };
  
+ /**
 diff --git a/libavutil/hwcontext_internal.h b/libavutil/hwcontext_internal.h
-index 94e4da16c0..cc9ed23496 100644
+index dcfdc2016a3..04a0a5c64e7 100644
 --- a/libavutil/hwcontext_internal.h
 +++ b/libavutil/hwcontext_internal.h
-@@ -166,5 +166,6 @@ extern const HWContextType ff_hwcontext_type_mediacodec;
+@@ -165,5 +165,6 @@ extern const HWContextType ff_hwcontext_type_mediacodec;
  extern const HWContextType ff_hwcontext_type_vulkan;
  extern const HWContextType ff_hwcontext_type_amf;
  extern const HWContextType ff_hwcontext_type_oh;
@@ -115,10 +114,10 @@ index 94e4da16c0..cc9ed23496 100644
  #endif /* AVUTIL_HWCONTEXT_INTERNAL_H */
 diff --git a/libavutil/hwcontext_rkmpp.c b/libavutil/hwcontext_rkmpp.c
 new file mode 100644
-index 0000000000..a03f8027be
+index 00000000000..d62f67e5937
 --- /dev/null
 +++ b/libavutil/hwcontext_rkmpp.c
-@@ -0,0 +1,603 @@
+@@ -0,0 +1,607 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -424,8 +423,9 @@ index 0000000000..a03f8027be
 +            return AVERROR(ENOMEM);
 +    }
 +
++    avfc->flags |= hwctx->flags;
 +    ret = mpp_buffer_group_get_internal(&avfc->buf_group,
-+                                        MPP_BUFFER_TYPE_DRM | hwctx->flags | avfc->flags);
++                                        MPP_BUFFER_TYPE_DRM | avfc->flags);
 +    if (ret != MPP_OK) {
 +        av_log(hwfc, AV_LOG_ERROR, "Failed to get MPP internal buffer group: %d\n", ret);
 +        return AVERROR_EXTERNAL;
@@ -531,7 +531,8 @@ index 0000000000..a03f8027be
 +
 +    if (desc->drm_desc.objects[0].format_modifier != DRM_FORMAT_MOD_LINEAR) {
 +        av_log(hwfc, AV_LOG_ERROR, "Transfer non-linear DRM_PRIME frame is not supported!\n");
-+        return AVERROR(ENOSYS);
++        err = AVERROR(ENOSYS);
++        goto fail;
 +    }
 +
 +    av_assert0(desc->drm_desc.nb_objects <= AV_DRM_MAX_PLANES);
@@ -684,7 +685,9 @@ index 0000000000..a03f8027be
 +{
 +    int err;
 +
-+    if (hwfc->sw_format != dst->format)
++    if (dst->format == AV_PIX_FMT_NONE)
++        dst->format = hwfc->sw_format;
++    else if (hwfc->sw_format != dst->format)
 +        return AVERROR(ENOSYS);
 +
 +    err = rkmpp_map_frame(hwfc, dst, src, flags);
@@ -724,7 +727,7 @@ index 0000000000..a03f8027be
 +};
 diff --git a/libavutil/hwcontext_rkmpp.h b/libavutil/hwcontext_rkmpp.h
 new file mode 100644
-index 0000000000..75394699c3
+index 00000000000..75394699c35
 --- /dev/null
 +++ b/libavutil/hwcontext_rkmpp.h
 @@ -0,0 +1,153 @@
