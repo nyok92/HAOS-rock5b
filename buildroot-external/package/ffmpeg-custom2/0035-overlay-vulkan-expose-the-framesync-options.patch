@@ -19,6 +19,7 @@ Publish them the way those filters do: the three entries in the option
 array, FRAMESYNC_DEFINE_CLASS() so the framesync child class is
 reachable for inspection, and the preinit callback the macro requires
 to initialise the FFFrameSync before options are applied.
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
 ---
  doc/filters.texi                |  2 ++
  libavfilter/vf_overlay_vulkan.c | 11 ++++++++++-
