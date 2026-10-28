@@ -3,5 +3,4 @@ config BR2_PACKAGE_ROCKCHIP_RGA
 	select BR2_PACKAGE_LIBDRM
 	help
 	  Rockchip RGA (2D raster graphic acceleration) userspace library.
-
 	  https://github.com/tsukumijima/librga-rockchip
