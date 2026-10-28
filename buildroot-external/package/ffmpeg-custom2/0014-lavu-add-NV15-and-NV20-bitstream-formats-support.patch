@@ -1,10 +1,9 @@
-From 463075094dca3b5549d44edb5ce5d225e2bb3b1c Mon Sep 17 00:00:00 2001
+From d3c06fd2eb304e6132ccbdfd8eab256aa1afc141 Mon Sep 17 00:00:00 2001
 From: nyanmisaka <nst799610810@gmail.com>
 Date: Sun, 8 Mar 2026 14:27:31 +0800
-Subject: [PATCH 1/4] lavu: add NV15 and NV20 bitstream formats support
+Subject: [PATCH] lavu: add NV15 and NV20 bitstream formats support
 
 Signed-off-by: nyanmisaka <nst799610810@gmail.com>
-(cherry picked from commit ee141a1cc531dbfd6bb415185f8ee7e18945adaf)
 ---
  libavutil/pixdesc.c              | 24 ++++++++++++++++++++++++
  libavutil/pixfmt.h               |  8 +++++---
@@ -12,7 +11,7 @@ Signed-off-by: nyanmisaka <nst799610810@gmail.com>
  3 files changed, 39 insertions(+), 3 deletions(-)
 
 diff --git a/libavutil/pixdesc.c b/libavutil/pixdesc.c
-index 90f9596def..5da0efa6f0 100644
+index ba25a256173..5bc90f15708 100644
 --- a/libavutil/pixdesc.c
 +++ b/libavutil/pixdesc.c
 @@ -3267,6 +3267,30 @@ static const AVPixFmtDescriptor av_pix_fmt_descriptors[AV_PIX_FMT_NB] = {
@@ -47,7 +46,7 @@ index 90f9596def..5da0efa6f0 100644
  
  static const char * const color_range_names[] = {
 diff --git a/libavutil/pixfmt.h b/libavutil/pixfmt.h
-index 2e7b6457e0..8a302d5b15 100644
+index 2e7b6457e02..8a302d5b156 100644
 --- a/libavutil/pixfmt.h
 +++ b/libavutil/pixfmt.h
 @@ -196,8 +196,8 @@ enum AVPixelFormat {
@@ -80,7 +79,7 @@ index 2e7b6457e0..8a302d5b15 100644
  #define AV_PIX_FMT_P010       AV_PIX_FMT_NE(P010BE,  P010LE)
  #define AV_PIX_FMT_P012       AV_PIX_FMT_NE(P012BE,  P012LE)
 diff --git a/tests/ref/fate/sws-pixdesc-query b/tests/ref/fate/sws-pixdesc-query
-index a062088d54..928a0613ce 100644
+index a062088d54c..928a0613ce7 100644
 --- a/tests/ref/fate/sws-pixdesc-query
 +++ b/tests/ref/fate/sws-pixdesc-query
 @@ -79,6 +79,8 @@ isNBPS:
