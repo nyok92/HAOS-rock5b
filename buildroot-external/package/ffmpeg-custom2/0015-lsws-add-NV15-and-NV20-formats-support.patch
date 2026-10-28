@@ -1,19 +1,18 @@
-From f4d377024dae010f68e873ee820e0021c9304121 Mon Sep 17 00:00:00 2001
+From e9b86bd754099318765c13816214c6a16e9615cb Mon Sep 17 00:00:00 2001
 From: nyanmisaka <nst799610810@gmail.com>
-Date: Sun, 8 Mar 2026 14:37:23 +0800
-Subject: [PATCH 2/4] lsws: add NV15 and NV20 formats support
+Date: Sun, 25 Oct 2026 16:39:31 +0800
+Subject: [PATCH] lsws: add NV15 and NV20 formats support
 
 Signed-off-by: nyanmisaka <nst799610810@gmail.com>
-(cherry picked from commit e15477c0199a5e870e5e76287f46472a649b4faa)
 ---
  libswscale/format.c           |  2 +
- libswscale/input.c            | 41 +++++++++++++++++++++
- libswscale/swscale_unscaled.c | 69 +++++++++++++++++++++++++++++++++++
+ libswscale/input.c            | 41 ++++++++++++++++++
+ libswscale/swscale_unscaled.c | 81 +++++++++++++++++++++++++++++++++++
  tests/ref/fate/imgutils       |  4 ++
- 4 files changed, 116 insertions(+)
+ 4 files changed, 128 insertions(+)
 
 diff --git a/libswscale/format.c b/libswscale/format.c
-index 3464a8af7c..fb7802b97d 100644
+index 3464a8af7c6..fb7802b97d1 100644
 --- a/libswscale/format.c
 +++ b/libswscale/format.c
 @@ -228,6 +228,8 @@ static const LegacyFormatEntry legacy_format_entries[] = {
@@ -26,7 +25,7 @@ index 3464a8af7c..fb7802b97d 100644
      [AV_PIX_FMT_P010BE]         = { 1, 1 },
      [AV_PIX_FMT_P012LE]         = { 1, 1 },
 diff --git a/libswscale/input.c b/libswscale/input.c
-index eb4eb3101e..00765bc6ce 100644
+index 175ed705f24..c52ccae9893 100644
 --- a/libswscale/input.c
 +++ b/libswscale/input.c
 @@ -946,6 +946,39 @@ static void nv21ToUV_c(uint8_t *dstU, uint8_t *dstV,
@@ -92,10 +91,10 @@ index eb4eb3101e..00765bc6ce 100644
          *lumToYV12 = nv20LEToY_c;
          break;
 diff --git a/libswscale/swscale_unscaled.c b/libswscale/swscale_unscaled.c
-index f612f88c4d..b1be6d464d 100644
+index 4cc51a3a9f1..bfc95e4ca38 100644
 --- a/libswscale/swscale_unscaled.c
 +++ b/libswscale/swscale_unscaled.c
-@@ -265,6 +265,62 @@ static int nv24ToYuv420Wrapper(SwsInternal *c, const uint8_t *const src[],
+@@ -269,6 +269,74 @@ static int nv24ToYuv420Wrapper(SwsInternal *c, const uint8_t *const src[],
      return srcSliceH;
  }
  
@@ -133,6 +132,14 @@ index f612f88c4d..b1be6d464d 100644
 +            *tdstY++ = (((tsrcY[4] & 0xFF) << 2) | ((tsrcY[3] >> 6) & 0x3 )) << shift[0];
 +            tsrcY += 5;
 +        }
++        const int y_rem = c->opts.src_w & 3;
++        if (y_rem) {
++            *tdstY++ = (((tsrcY[1] & 0x3) << 8) | (tsrcY[0] & 0xFF)) << shift[0];
++            if (y_rem > 1)
++                *tdstY++ = (((tsrcY[2] & 0xF ) << 6) | ((tsrcY[1] >> 2) & 0x3F)) << shift[0];
++            if (y_rem > 2)
++                *tdstY++ = (((tsrcY[3] & 0x3F) << 4) | ((tsrcY[2] >> 4) & 0xF )) << shift[0];
++        }
 +        src[0] += srcStride[0];
 +        dstY += dstStride[0] / sizeof(uint16_t);
 +    }
@@ -147,6 +154,10 @@ index f612f88c4d..b1be6d464d 100644
 +            *tdstV++ = (((tsrcUV[4] & 0xFF) << 2) | ((tsrcUV[3] >> 6) & 0x3 )) << shift[2];
 +            tsrcUV += 5;
 +        }
++        if (c->chrSrcW & 1) {
++            *tdstU++ = (((tsrcUV[1] & 0x3) << 8) | (tsrcUV[0]        & 0xFF)) << shift[1];
++            *tdstV++ = (((tsrcUV[2] & 0xF) << 6) | ((tsrcUV[1] >> 2) & 0x3F)) << shift[2];
++        }
 +        src[1] += srcStride[1];
 +        dstU += dstStride[1] / sizeof(uint16_t);
 +        dstV += dstStride[2] / sizeof(uint16_t);
@@ -158,7 +169,7 @@ index f612f88c4d..b1be6d464d 100644
  static int planarToP01xWrapper(SwsInternal *c, const uint8_t *const src8[],
                                 const int srcStride[], int srcSliceY,
                                 int srcSliceH, uint8_t *const dstParam8[],
-@@ -2407,6 +2463,19 @@ void ff_get_unscaled_swscale(SwsInternal *c)
+@@ -2410,6 +2478,19 @@ void ff_get_unscaled_swscale(SwsInternal *c)
          (srcFormat == AV_PIX_FMT_NV24 || srcFormat == AV_PIX_FMT_NV42)) {
          c->convert_unscaled = nv24ToPlanarWrapper;
      }
@@ -179,7 +190,7 @@ index f612f88c4d..b1be6d464d 100644
      if ((srcFormat == AV_PIX_FMT_YUV420P || srcFormat == AV_PIX_FMT_YUV422P ||
           srcFormat == AV_PIX_FMT_YUVA420P) && isAnyRGB(dstFormat) &&
 diff --git a/tests/ref/fate/imgutils b/tests/ref/fate/imgutils
-index ccd1522ef2..a998b12170 100644
+index ccd1522ef2a..a998b12170d 100644
 --- a/tests/ref/fate/imgutils
 +++ b/tests/ref/fate/imgutils
 @@ -306,6 +306,8 @@ gbrp10msbbe     planes: 3, linesizes: 128 128 128   0, plane_sizes:  6144  6144
