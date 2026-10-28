@@ -3,7 +3,9 @@
 # ROCKCHIP_RGA
 #
 ################################################################################
-
+# v1.10.6
+#ROCKCHIP_RGA_VERSION = 2b32edcb97b601b25683e2941d888c8515da6d55
+#ROCKCHIP_RGA_SITE = $(call github,airockchip,librga,$(ROCKCHIP_RGA_VERSION))
 ROCKCHIP_RGA_VERSION = master
 ROCKCHIP_RGA_SITE = $(call github,tsukumijima,librga-rockchip,$(ROCKCHIP_RGA_VERSION))
 ROCKCHIP_RGA_LICENSE = Apache-2.0
