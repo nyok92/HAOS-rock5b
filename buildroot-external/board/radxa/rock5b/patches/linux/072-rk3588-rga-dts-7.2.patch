@@ -1,0 +1,72 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Fri, 21 Aug 2026 15:32:22 -0400
+Subject: [PATCH] arm64: dts: rockchip: rk3588: point the RGA cores at the
+ multicore driver
+
+The SoC has three RGA cores -- two RGA3 and one RGA2 -- and the dtsi
+describes each of them for the in-tree V4L2 rockchip-rga driver, which
+binds one core per video node. Retarget all three at the vendor
+multicore driver added by "video: rockchip: add multicore RGA vendor
+driver", whose single /dev/rga ABI schedules work across the cores and
+is what librga speaks.
+
+Two properties per node change. The compatible selects the driver and,
+for the RGA3 pair, tells the two otherwise-identical cores apart: the
+vendor driver derives its per-core register layout from
+rockchip,rga3_core0 / rockchip,rga3_core1 / rockchip,rga2_core0 rather
+than from probe order. The register window grows to the full 4 KiB each
+core occupies, because the driver programs the core's IOMMU through that
+window at offset 0xf00; the 0x200 and 0x180 windows stop short of it.
+
+The separate rga3_0_mmu / rga3_1_mmu nodes stay as they are, bound by
+rockchip-iommu as before, and no clock, reset, interrupt or power-domain
+property moves: the driver takes its clocks with clk_bulk_get_all and
+looks up no reset or interrupt by name.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/rockchip/rk3588-base.dtsi | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
+index 56045969abee..597317167b8e 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
+@@ -1265,8 +1265,8 @@ vpu121_mmu: iommu@fdb50800 {
+ 	};
+ 
+ 	rga3_core0: rga@fdb60000 {
+-		compatible = "rockchip,rk3588-rga3";
+-		reg = <0x0 0xfdb60000 0x0 0x200>;
++		compatible = "rockchip,rga3_core0";
++		reg = <0x0 0xfdb60000 0x0 0x1000>;
+ 		interrupts = <GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH 0>;
+ 		clocks = <&cru ACLK_RGA3_0>, <&cru HCLK_RGA3_0>, <&cru CLK_RGA3_0_CORE>;
+ 		clock-names = "aclk", "hclk", "sclk";
+@@ -1287,8 +1287,8 @@ rga3_0_mmu: iommu@fdb60f00 {
+ 	};
+ 
+ 	rga3_core1: rga@fdb70000 {
+-		compatible = "rockchip,rk3588-rga3";
+-		reg = <0x0 0xfdb70000 0x0 0x200>;
++		compatible = "rockchip,rga3_core1";
++		reg = <0x0 0xfdb70000 0x0 0x1000>;
+ 		interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH 0>;
+ 		clocks = <&cru ACLK_RGA3_1>, <&cru HCLK_RGA3_1>, <&cru CLK_RGA3_1_CORE>;
+ 		clock-names = "aclk", "hclk", "sclk";
+@@ -1308,9 +1308,9 @@ rga3_1_mmu: iommu@fdb70f00 {
+ 		power-domains = <&power RK3588_PD_RGA31>;
+ 	};
+ 
+-	rga: rga@fdb80000 {
+-		compatible = "rockchip,rk3588-rga", "rockchip,rk3288-rga";
+-		reg = <0x0 0xfdb80000 0x0 0x180>;
++	rga2: rga@fdb80000 {
++		compatible = "rockchip,rga2_core0";
++		reg = <0x0 0xfdb80000 0x0 0x1000>;
+ 		interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH 0>;
+ 		clocks = <&cru ACLK_RGA2>, <&cru HCLK_RGA2>, <&cru CLK_RGA2_CORE>;
+ 		clock-names = "aclk", "hclk", "sclk";
+-- 
+2.43.0

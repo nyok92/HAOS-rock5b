@@ -1,0 +1,16 @@
+diff --git a/drivers/usb/cdns3/Kconfig b/drivers/usb/cdns3/Kconfig
+index 111111111111..222222222222 100644
+--- a/drivers/usb/cdns3/Kconfig
++++ b/drivers/usb/cdns3/Kconfig
+@@ -1,9 +1,6 @@
+ config USB_CDNS_SUPPORT
+-	tristate "Cadence USB Support"
+-	depends on USB_SUPPORT && HAS_DMA
+-	depends on USB || USB_GADGET
+-	depends on USB if !USB_GADGET
+-	depends on USB_GADGET if !USB
++	tristate "Cadence USB Support" if USB || USB_GADGET
++	depends on USB_SUPPORT && HAS_DMA && (USB || USB_GADGET)
+ 	select USB_XHCI_PLATFORM if USB_XHCI_HCD
+ 	select USB_ROLE_SWITCH
+ 	help
