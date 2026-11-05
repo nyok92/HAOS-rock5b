@@ -68,35 +68,45 @@ fails", patch 1/7 of the rk3588-jpegdec series, posted 2026-08-19, state `New`
 as of 2026-08-20:
 https://patchwork.kernel.org/project/linux-rockchip/list/?series=1148425
 
-Carried unmodified. It is the codec-agnostic core fix the rest of that series (a
-VPU720 JPEG decoder we do not build) sits on: it gives hantro_end_prepare_run()
-an error argument so a failed ->run() completes the media request without
+It is the codec-agnostic core fix the rest of that series (a VPU720 JPEG
+decoder we do not build) sits on: it gives hantro_end_prepare_run() an error
+argument so a failed ->run() completes the media request without
 double-finishing the job or arming the watchdog for a job that never starts.
 The kernel's AV1 tile-count rejection in rockchip_vpu981_av1_dec_prepare_run()
 rides exactly this path -- without this fix, a rejected AV1 tile count throws a
 WARN and mis-arms the watchdog to abort an unrelated concurrent decode. Drop
 this when the fix lands upstream.
 
- .../media/platform/verisilicon/hantro_drv.c   | 32 ++++++++++++++++---
- .../platform/verisilicon/hantro_g1_h264_dec.c |  2 +-
- .../verisilicon/hantro_g1_mpeg2_dec.c         |  2 +-
- .../platform/verisilicon/hantro_g1_vp8_dec.c  |  2 +-
- .../platform/verisilicon/hantro_g2_hevc_dec.c |  2 +-
- .../platform/verisilicon/hantro_g2_vp9_dec.c  |  4 +--
- .../platform/verisilicon/hantro_h1_jpeg_enc.c |  2 +-
- .../media/platform/verisilicon/hantro_hw.h    |  2 +-
- .../verisilicon/rockchip_vpu2_hw_h264_dec.c   |  2 +-
- .../verisilicon/rockchip_vpu2_hw_jpeg_enc.c   |  2 +-
- .../verisilicon/rockchip_vpu2_hw_mpeg2_dec.c  |  2 +-
- .../verisilicon/rockchip_vpu2_hw_vp8_dec.c    |  2 +-
- .../verisilicon/rockchip_vpu981_hw_av1_dec.c  |  5 ++-
- 13 files changed, 42 insertions(+), 19 deletions(-)
+Rebased onto v7.4-rc1, which reworked device_run(): the clocks are now
+enabled/disabled in the runtime PM callbacks, and a failing ->run() already
+goes through hantro_job_finish(), which drops the pm reference. The
+device_run() hunk of the posting (err_clk_disable/err_pm_put labels) is
+therefore dropped; it would double-put the pm reference and disable clocks
+that device_run() no longer enables. The hantro_end_prepare_run() error
+argument and the removal of hantro_irq_done() from the AV1 error path are
+carried unchanged: together with upstream's hantro_job_finish() on ->run()
+failure they give exactly one pm put and one job finish on that path.
+
+ drivers/media/platform/verisilicon/hantro_drv.c    | 24 ++++++++++++++++++++--
+ .../platform/verisilicon/hantro_g1_h264_dec.c      |  2 +-
+ .../platform/verisilicon/hantro_g1_mpeg2_dec.c     |  2 +-
+ .../media/platform/verisilicon/hantro_g1_vp8_dec.c |  2 +-
+ .../platform/verisilicon/hantro_g2_hevc_dec.c      |  2 +-
+ .../media/platform/verisilicon/hantro_g2_vp9_dec.c |  4 ++--
+ .../platform/verisilicon/hantro_h1_jpeg_enc.c      |  2 +-
+ drivers/media/platform/verisilicon/hantro_hw.h     |  2 +-
+ .../verisilicon/rockchip_vpu2_hw_h264_dec.c        |  2 +-
+ .../verisilicon/rockchip_vpu2_hw_jpeg_enc.c        |  2 +-
+ .../verisilicon/rockchip_vpu2_hw_mpeg2_dec.c       |  2 +-
+ .../verisilicon/rockchip_vpu2_hw_vp8_dec.c         |  2 +-
+ .../verisilicon/rockchip_vpu981_hw_av1_dec.c       |  5 ++---
+ 13 files changed, 36 insertions(+), 17 deletions(-)
 
 diff --git a/drivers/media/platform/verisilicon/hantro_drv.c b/drivers/media/platform/verisilicon/hantro_drv.c
-index 2e81877f6..d9936f697 100644
+index 26e5d5547..afeb1139b 100644
 --- a/drivers/media/platform/verisilicon/hantro_drv.c
 +++ b/drivers/media/platform/verisilicon/hantro_drv.c
-@@ -147,11 +147,28 @@ void hantro_start_prepare_run(struct hantro_ctx *ctx)
+@@ -144,11 +144,28 @@ void hantro_start_prepare_run(struct hantro_ctx *ctx)
  	}
  }
  
@@ -127,7 +137,7 @@ index 2e81877f6..d9936f697 100644
  		if (hantro_needs_postproc(ctx, ctx->vpu_dst_fmt))
  			hantro_postproc_enable(ctx);
  		else
-@@ -162,6 +179,9 @@ void hantro_end_prepare_run(struct hantro_ctx *ctx)
+@@ -159,6 +176,9 @@ void hantro_end_prepare_run(struct hantro_ctx *ctx)
  	v4l2_ctrl_request_complete(src_buf->vb2_buf.req_obj.req,
  				   &ctx->ctrl_handler);
  
@@ -137,28 +147,6 @@ index 2e81877f6..d9936f697 100644
  	/* Kick the watchdog. */
  	schedule_delayed_work(&ctx->dev->watchdog_work,
  			      msecs_to_jiffies(2000));
-@@ -182,15 +202,19 @@ static void device_run(void *priv)
- 
- 	ret = clk_bulk_enable(ctx->dev->variant->num_clocks, ctx->dev->clocks);
- 	if (ret)
--		goto err_cancel_job;
-+		goto err_pm_put;
- 
- 	v4l2_m2m_buf_copy_metadata(src, dst);
- 
- 	if (ctx->codec_ops->run(ctx))
--		goto err_cancel_job;
-+		goto err_clk_disable;
- 
- 	return;
- 
-+err_clk_disable:
-+	clk_bulk_disable(ctx->dev->variant->num_clocks, ctx->dev->clocks);
-+err_pm_put:
-+	pm_runtime_put_autosuspend(ctx->dev->dev);
- err_cancel_job:
- 	hantro_job_finish_no_pm(ctx->dev, ctx, VB2_BUF_STATE_ERROR);
- }
 diff --git a/drivers/media/platform/verisilicon/hantro_g1_h264_dec.c b/drivers/media/platform/verisilicon/hantro_g1_h264_dec.c
 index ad5c1a663..30c2ac32c 100644
 --- a/drivers/media/platform/verisilicon/hantro_g1_h264_dec.c
@@ -173,10 +161,10 @@ index ad5c1a663..30c2ac32c 100644
  	/* Start decoding! */
  	vdpu_write_relaxed(vpu,
 diff --git a/drivers/media/platform/verisilicon/hantro_g1_mpeg2_dec.c b/drivers/media/platform/verisilicon/hantro_g1_mpeg2_dec.c
-index e0d6bd0a6..bfcece9f8 100644
+index 6a942f4b8..f17ee0338 100644
 --- a/drivers/media/platform/verisilicon/hantro_g1_mpeg2_dec.c
 +++ b/drivers/media/platform/verisilicon/hantro_g1_mpeg2_dec.c
-@@ -232,7 +232,7 @@ int hantro_g1_mpeg2_dec_run(struct hantro_ctx *ctx)
+@@ -237,7 +237,7 @@ int hantro_g1_mpeg2_dec_run(struct hantro_ctx *ctx)
  					&dst_buf->vb2_buf,
  					seq, pic);
  
@@ -312,10 +300,10 @@ index d07907544..6568e2aee 100644
  	hantro_reg_write(vpu, &vp8_dec_start_dec, 1);
  
 diff --git a/drivers/media/platform/verisilicon/rockchip_vpu981_hw_av1_dec.c b/drivers/media/platform/verisilicon/rockchip_vpu981_hw_av1_dec.c
-index 00aa566a4..d1b7a21d2 100644
+index 2a145433e..29428f79b 100644
 --- a/drivers/media/platform/verisilicon/rockchip_vpu981_hw_av1_dec.c
 +++ b/drivers/media/platform/verisilicon/rockchip_vpu981_hw_av1_dec.c
-@@ -2224,15 +2224,14 @@ int rockchip_vpu981_av1_dec_run(struct hantro_ctx *ctx)
+@@ -2266,15 +2266,14 @@ int rockchip_vpu981_av1_dec_run(struct hantro_ctx *ctx)
  	rockchip_vpu981_av1_dec_set_output_buffer(ctx);
  	rockchip_vpu981_av1_dec_set_input_buffer(ctx, vb2_src);
  
@@ -333,3 +321,5 @@ index 00aa566a4..d1b7a21d2 100644
  	return ret;
  }
  
+-- 
+2.43.0
