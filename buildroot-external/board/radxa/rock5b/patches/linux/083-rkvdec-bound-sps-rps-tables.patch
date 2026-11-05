@@ -1,0 +1,281 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 07:57:16 -0400
+Subject: [PATCH] media: rkvdec: bound the HEVC SPS RPS tables
+
+The VDPU381 and VDPU383 parse HEVC slice headers in hardware and take the
+SPS-level reference picture sets through the EXT_SPS_ST_RPS and
+EXT_SPS_LT_RPS controls.  Nothing bounds what arrives in them.  The V4L2
+core validates the short-term control's flags word and nothing else, and
+the SPS counts that say how much of each array to read are u8.
+
+Three of those values index fixed-size arrays:
+
+  - num_short_term_ref_pic_sets and num_long_term_ref_pics_sps are the
+    loop bounds over the 64- and 32-entry array controls, and they index the
+    RPS table by set: RPS_ST_REF_SET_*(i) is defined for i up to 63 and
+    RPS_LT_REF_*(i) for i up to 31, so a larger count writes outside
+    struct rkvdec_rps.
+
+  - num_negative_pics and num_positive_pics count entries into the
+    control's own delta_poc_s0_minus1[16] and delta_poc_s1_minus1[16] and
+    into the scratch set the calculation builds, and their sum is walked
+    inclusively by the prediction path through two 16-byte stack arrays.
+
+  - delta_idx_minus1 names the set to predict from as an offset back from
+    the current one (7-59).  The subtraction is done in u8, so a value
+    past the current index does not go negative, it wraps.
+
+Bound all of them where the control is set.  The limits are the ones the
+field macros already spell out, and each is at or above what HEVC allows
+-- num_short_term_ref_pic_sets is at most 64, num_long_term_ref_pics_sps
+at most 32, and NumDeltaPocs at most sps_max_dec_pic_buffering_minus1,
+which cannot exceed 15 -- so nothing a conforming stream can produce is
+refused.  Reject rather than clamp, as the tile-count checks do: a set the
+hardware table cannot express is not one this decoder can honour.
+
+A set derived by prediction holds up to one delta POC more than the set it
+predicts from, so a chain of predictions could still climb past the arrays
+with every input in range.  Refuse that where it is computed, and leave
+the RPS table untouched for that run rather than assembling from a set
+that does not fit.
+
+While here, the scratch array the calculation builds is allocated with
+kzalloc() from a product that is never checked and a pointer that is never
+tested; make it a kcalloc() and return if it fails.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ .../rockchip/rkvdec/rkvdec-hevc-common.c      | 88 ++++++++++++++++---
+ .../rockchip/rkvdec/rkvdec-hevc-common.h      | 16 ++++
+ .../rockchip/rkvdec/rkvdec-vdpu381-hevc.c     |  5 +-
+ .../rockchip/rkvdec/rkvdec-vdpu383-hevc.c     |  5 +-
+ 4 files changed, 102 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-hevc-common.c b/drivers/media/platform/rockchip/rkvdec/rkvdec-hevc-common.c
+index 2b8e04dd1..b9a0bfc46 100644
+--- a/drivers/media/platform/rockchip/rkvdec/rkvdec-hevc-common.c
++++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-hevc-common.c
+@@ -33,6 +33,56 @@ struct calculated_rps_st_set {
+ 	s32 delta_poc_s1[16];
+ };
+ 
++/*
++ * num_short_term_ref_pic_sets and num_long_term_ref_pics_sps arrive as u8 and
++ * nothing in the V4L2 core bounds them.  Both index the RPS table the decoder
++ * reads: a short-term set past 64, or a long-term entry past 32, is written
++ * outside struct rkvdec_rps entirely.  The same counts are the loop bounds over
++ * the two RPS array controls, which hold 64 and 32 entries.
++ */
++int rkvdec_hevc_validate_sps_rps_counts(struct rkvdec_ctx *ctx,
++					const struct v4l2_ctrl_hevc_sps *sps)
++{
++	if (sps->num_short_term_ref_pic_sets > RKVDEC_HEVC_MAX_ST_RPS ||
++	    sps->num_long_term_ref_pics_sps > RKVDEC_HEVC_MAX_LT_RPS)
++		return -EINVAL;
++
++	return 0;
++}
++
++/*
++ * The short-term RPS control carries one set per element, and every field of it
++ * reaches the calculation below unchecked -- the V4L2 core validates only the
++ * flags word.  Two of them index fixed-size arrays.
++ *
++ * num_negative_pics and num_positive_pics count entries into the control's own
++ * delta_poc_s0_minus1[16] / delta_poc_s1_minus1[16] and into the scratch set the
++ * calculation builds, and their sum is the count the prediction path walks
++ * inclusively.  delta_idx_minus1 names the set to predict from, as an offset
++ * back from this one (7-59), so it has to land inside the array and before this
++ * entry.
++ */
++int rkvdec_hevc_validate_ext_sps_st_rps(struct rkvdec_ctx *ctx,
++					const struct v4l2_ctrl *ctrl)
++{
++	const struct v4l2_ctrl_hevc_ext_sps_st_rps *rps = ctrl->p_new.p;
++	unsigned int i;
++
++	for (i = 0; i < ctrl->elems; i++) {
++		if (rps[i].flags & V4L2_HEVC_EXT_SPS_ST_RPS_FLAG_INTER_REF_PIC_SET_PRED) {
++			if (rps[i].delta_idx_minus1 >= i)
++				return -EINVAL;
++			continue;
++		}
++
++		if (rps[i].num_negative_pics + rps[i].num_positive_pics >
++		    RKVDEC_HEVC_MAX_DELTA_POCS)
++			return -EINVAL;
++	}
++
++	return 0;
++}
++
+ void compute_tiles_uniform(struct rkvdec_hevc_run *run, u16 log2_min_cb_size,
+ 			   u16 width, u16 height, s32 pic_in_cts_width,
+ 			   s32 pic_in_cts_height, u16 *column_width, u16 *row_height)
+@@ -201,8 +251,8 @@ static void rkvdec_hevc_assemble_hw_st_rps(struct rkvdec_hevc_run *run, struct r
+ /*
+  * Compute the short term ref pic set parameters based on its reference short term ref pic
+  */
+-static void st_ref_pic_set_prediction(struct rkvdec_hevc_run *run, int idx,
+-				      struct calculated_rps_st_set *calculated_rps_st_sets)
++static int st_ref_pic_set_prediction(struct rkvdec_hevc_run *run, int idx,
++				     struct calculated_rps_st_set *calculated_rps_st_sets)
+ {
+ 	const struct v4l2_ctrl_hevc_ext_sps_st_rps *rps_data = &run->ext_sps_st_rps[idx];
+ 	struct calculated_rps_st_set *st_rps = &calculated_rps_st_sets[idx];
+@@ -216,7 +266,7 @@ static void st_ref_pic_set_prediction(struct rkvdec_hevc_run *run, int idx,
+ 	int dPoc;
+ 
+ 	if ((unsigned int)rps_data->delta_idx_minus1 + 1 > idx)
+-		return;
++		return -EINVAL;
+ 
+ 	ref_rps_idx = st_rps_idx - (rps_data->delta_idx_minus1 + 1); /* 7-59 */
+ 	delta_rps = (1 - 2 * rps_data->delta_rps_sign) *
+@@ -224,6 +274,16 @@ static void st_ref_pic_set_prediction(struct rkvdec_hevc_run *run, int idx,
+ 
+ 	ref_rps = &calculated_rps_st_sets[ref_rps_idx];
+ 
++	/*
++	 * rkvdec_hevc_validate_ext_sps_st_rps() bounds every count that arrives
++	 * in the control, but a set derived here holds up to one delta POC more
++	 * than the set it predicts from, so a chain of predictions can climb
++	 * past what the arrays below and the hardware table hold.  Refuse it:
++	 * a set the table cannot express is not one this decoder can honour.
++	 */
++	if (ref_rps->num_delta_pocs > RKVDEC_HEVC_MAX_DELTA_POCS)
++		return -EINVAL;
++
+ 	for (j = 0; j <= ref_rps->num_delta_pocs; j++) {
+ 		used_by_curr_pic_flag[j] = !!(rps_data->used_by_curr_pic & (1 << j));
+ 		use_delta_flag[j] = !!(rps_data->use_delta_flag & (1 << j));
+@@ -276,6 +336,8 @@ static void st_ref_pic_set_prediction(struct rkvdec_hevc_run *run, int idx,
+ 	st_rps->num_positive_pics = i;
+ 
+ 	st_rps->num_delta_pocs = st_rps->num_positive_pics + st_rps->num_negative_pics;
++
++	return 0;
+ }
+ 
+ /*
+@@ -339,23 +401,29 @@ static void rkvdec_hevc_prepare_hw_st_rps(struct rkvdec_hevc_run *run, struct rk
+ 		return;
+ 
+ 	struct calculated_rps_st_set *calculated_rps_st_sets =
+-		kzalloc(sizeof(struct calculated_rps_st_set) *
+-			run->sps->num_short_term_ref_pic_sets, GFP_KERNEL);
++		kcalloc(run->sps->num_short_term_ref_pic_sets,
++			sizeof(*calculated_rps_st_sets), GFP_KERNEL);
++
++	if (!calculated_rps_st_sets)
++		return;
+ 
+ 	for (idx = 0; idx < run->sps->num_short_term_ref_pic_sets; idx++) {
+ 		const struct v4l2_ctrl_hevc_ext_sps_st_rps *rps_data = &run->ext_sps_st_rps[idx];
+ 
+-		if (rps_data->flags & V4L2_HEVC_EXT_SPS_ST_RPS_FLAG_INTER_REF_PIC_SET_PRED)
+-			st_ref_pic_set_prediction(run, idx, calculated_rps_st_sets);
+-		else
++		if (rps_data->flags & V4L2_HEVC_EXT_SPS_ST_RPS_FLAG_INTER_REF_PIC_SET_PRED) {
++			if (st_ref_pic_set_prediction(run, idx, calculated_rps_st_sets))
++				goto free_sets;
++		} else {
+ 			st_ref_pic_set_calculate(run, idx, calculated_rps_st_sets);
++		}
+ 	}
+ 
+ 	rkvdec_hevc_assemble_hw_st_rps(run, rps, calculated_rps_st_sets);
+ 
+-	kfree(calculated_rps_st_sets);
+-
+ 	memcpy(cache, run->ext_sps_st_rps, sizeof(struct v4l2_ctrl_hevc_ext_sps_st_rps));
++
++free_sets:
++	kfree(calculated_rps_st_sets);
+ }
+ 
+ void rkvdec_hevc_assemble_hw_rps(struct rkvdec_hevc_run *run, struct rkvdec_rps *rps,
+diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-hevc-common.h b/drivers/media/platform/rockchip/rkvdec/rkvdec-hevc-common.h
+index 2a9b7719a..c37552487 100644
+--- a/drivers/media/platform/rockchip/rkvdec/rkvdec-hevc-common.h
++++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-hevc-common.h
+@@ -35,6 +35,18 @@
+ 
+ #define RKVDEC_RPS_HEVC_SIZE		ALIGN(1032 + 64 * 384, 128)
+ 
++/*
++ * The bounds the field macros above spell out: 64 short-term sets, 32 long-term
++ * entries, and 15 delta POCs per short-term set.  Each is at or above the HEVC
++ * maximum -- num_short_term_ref_pic_sets is at most 64, num_long_term_ref_pics_sps
++ * at most 32, and NumDeltaPocs at most sps_max_dec_pic_buffering_minus1, which
++ * cannot exceed 15 -- so bounding against them refuses nothing a conforming
++ * stream can produce.
++ */
++#define RKVDEC_HEVC_MAX_ST_RPS		64
++#define RKVDEC_HEVC_MAX_LT_RPS		32
++#define RKVDEC_HEVC_MAX_DELTA_POCS	15
++
+ struct rkvdec_rps {
+ 	u32 info[RKVDEC_RPS_HEVC_SIZE / 8 / 4];
+ } __packed;
+@@ -58,6 +70,10 @@ struct scaling_factor {
+ 	u8 reserved[4];		/*16Bytes align*/
+ };
+ 
++int rkvdec_hevc_validate_ext_sps_st_rps(struct rkvdec_ctx *ctx,
++					const struct v4l2_ctrl *ctrl);
++int rkvdec_hevc_validate_sps_rps_counts(struct rkvdec_ctx *ctx,
++					const struct v4l2_ctrl_hevc_sps *sps);
+ void compute_tiles_uniform(struct rkvdec_hevc_run *run, u16 log2_min_cb_size,
+ 			   u16 width, u16 height, s32 pic_in_cts_width,
+ 			   s32 pic_in_cts_height, u16 *column_width, u16 *row_height);
+diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-vdpu381-hevc.c b/drivers/media/platform/rockchip/rkvdec/rkvdec-vdpu381-hevc.c
+index ab0dc282d..8bf51db2b 100644
+--- a/drivers/media/platform/rockchip/rkvdec/rkvdec-vdpu381-hevc.c
++++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-vdpu381-hevc.c
+@@ -533,7 +533,7 @@ static int rkvdec_hevc_validate_sps(struct rkvdec_ctx *ctx,
+ 	    sps->pic_height_in_luma_samples > ctx->coded_fmt.fmt.pix_mp.height)
+ 		return -EINVAL;
+ 
+-	return 0;
++	return rkvdec_hevc_validate_sps_rps_counts(ctx, sps);
+ }
+ 
+ static int rkvdec_hevc_start(struct rkvdec_ctx *ctx)
+@@ -628,6 +628,9 @@ static int rkvdec_hevc_try_ctrl(struct rkvdec_ctx *ctx, struct v4l2_ctrl *ctrl)
+ 	if (ctrl->id == V4L2_CID_STATELESS_HEVC_SPS)
+ 		return rkvdec_hevc_validate_sps(ctx, ctrl->p_new.p_hevc_sps);
+ 
++	if (ctrl->id == V4L2_CID_STATELESS_HEVC_EXT_SPS_ST_RPS)
++		return rkvdec_hevc_validate_ext_sps_st_rps(ctx, ctrl);
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-vdpu383-hevc.c b/drivers/media/platform/rockchip/rkvdec/rkvdec-vdpu383-hevc.c
+index 2862231b1..f72e7019b 100644
+--- a/drivers/media/platform/rockchip/rkvdec/rkvdec-vdpu383-hevc.c
++++ b/drivers/media/platform/rockchip/rkvdec/rkvdec-vdpu383-hevc.c
+@@ -481,7 +481,7 @@ static int rkvdec_hevc_validate_sps(struct rkvdec_ctx *ctx,
+ 	    sps->pic_height_in_luma_samples > ctx->coded_fmt.fmt.pix_mp.height)
+ 		return -EINVAL;
+ 
+-	return 0;
++	return rkvdec_hevc_validate_sps_rps_counts(ctx, sps);
+ }
+ 
+ static int rkvdec_hevc_start(struct rkvdec_ctx *ctx)
+@@ -581,6 +581,9 @@ static int rkvdec_hevc_try_ctrl(struct rkvdec_ctx *ctx, struct v4l2_ctrl *ctrl)
+ 	if (ctrl->id == V4L2_CID_STATELESS_HEVC_SPS)
+ 		return rkvdec_hevc_validate_sps(ctx, ctrl->p_new.p_hevc_sps);
+ 
++	if (ctrl->id == V4L2_CID_STATELESS_HEVC_EXT_SPS_ST_RPS)
++		return rkvdec_hevc_validate_ext_sps_st_rps(ctx, ctrl);
++
+ 	return 0;
+ }
+ 
+-- 
+2.43.0
+

@@ -1,0 +1,208 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Sat, 9 May 2026 19:54:04 -0400
+Subject: [PATCH] video: rockchip: rga3: build the vendor driver against
+ mainline APIs
+
+Four adjustments the vendor multicore RGA driver (extracted from
+rockchip-linux/kernel develop-6.6 in
+070-rga-multicore-vendor-oot.patch) needs to compile against a mainline
+kernel:
+
+1. hrtimer_init() is gone; hrtimer_setup() folds the .function
+   assignment into a single call.
+
+2. MODULE_IMPORT_NS() takes a string literal rather than a bare
+   identifier (commit cdd30ebb1b9f, kernel 6.14).
+
+3. Add explicit #include <linux/version.h> to all rga3 .c files that
+   reference LINUX_VERSION_CODE in #if conditionals. The vendor source
+   relies on transitive inclusion via private headers (rga.h, etc.),
+   which is unreliable: in some build orderings LINUX_VERSION_CODE
+   evaluates as 0, making the obsolete <5.10 / <6.12 branches active
+   and pulling in unexported symbols (pte_offset_map_lock).
+   Affected files: rga_common.c, rga_debugger.c, rga_dma_buf.c,
+   rga_drv.c, rga_job.c, rga_mm.c.
+
+4. strncpy() is gone from the kernel as of 7.2; use strscpy_pad(),
+   which is what this call site wants anyway. driver_version is an
+   uninitialised stack struct copied whole to userspace, so the tail
+   of .str has to be written, and strscpy_pad() also terminates a
+   source that fills the field where strncpy() would not.
+
+All other RGA source files in the vendor driver compile clean without
+modification.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ drivers/video/rockchip/rga3/rga_common.c   |  2 ++
+ drivers/video/rockchip/rga3/rga_debugger.c |  1 +
+ drivers/video/rockchip/rga3/rga_dma_buf.c  |  2 ++
+ drivers/video/rockchip/rga3/rga_drv.c      | 13 +++++-----
+ drivers/video/rockchip/rga3/rga_job.c      |  2 ++
+ drivers/video/rockchip/rga3/rga_mm.c       | 28 ++++++++++++++++++++++
+ 6 files changed, 42 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/video/rockchip/rga3/rga_common.c b/drivers/video/rockchip/rga3/rga_common.c
+index c6066de6b8f7..325a412b11d9 100644
+--- a/drivers/video/rockchip/rga3/rga_common.c
++++ b/drivers/video/rockchip/rga3/rga_common.c
+@@ -5,6 +5,8 @@
+  * Author: Cerf Yu <cerf.yu@rock-chips.com>
+  */
+ 
++#include <linux/version.h>
++
+ #include "rga.h"
+ #include "rga_common.h"
+ 
+diff --git a/drivers/video/rockchip/rga3/rga_debugger.c b/drivers/video/rockchip/rga3/rga_debugger.c
+index 95cc8097648b..2af0ce3f16ac 100644
+--- a/drivers/video/rockchip/rga3/rga_debugger.c
++++ b/drivers/video/rockchip/rga3/rga_debugger.c
+@@ -7,6 +7,7 @@
+  *	Huang Lee <Putin.li@rock-chips.com>
+  */
+ 
++#include <linux/version.h>
+ #include <linux/slab.h>
+ #include <linux/delay.h>
+ #include <linux/syscalls.h>
+diff --git a/drivers/video/rockchip/rga3/rga_dma_buf.c b/drivers/video/rockchip/rga3/rga_dma_buf.c
+index 4e8ae1b12a2d..84e5cf44e0b6 100644
+--- a/drivers/video/rockchip/rga3/rga_dma_buf.c
++++ b/drivers/video/rockchip/rga3/rga_dma_buf.c
+@@ -5,6 +5,8 @@
+  * Author: Huang Lee <Putin.li@rock-chips.com>
+  */
+ 
++#include <linux/version.h>
++
+ #include "rga_dma_buf.h"
+ #include "rga.h"
+ #include "rga_common.h"
+diff --git a/drivers/video/rockchip/rga3/rga_drv.c b/drivers/video/rockchip/rga3/rga_drv.c
+index 9ef013bb651c..fed7faa81a23 100644
+--- a/drivers/video/rockchip/rga3/rga_drv.c
++++ b/drivers/video/rockchip/rga3/rga_drv.c
+@@ -5,6 +5,8 @@
+  * Author: Huang Lee <Putin.li@rock-chips.com>
+  */
+ 
++#include <linux/version.h>
++
+ #include "rga2_reg_info.h"
+ #include "rga3_reg_info.h"
+ #include "rga_dma_buf.h"
+@@ -359,9 +361,7 @@ static enum hrtimer_restart hrtimer_handler(struct hrtimer *timer)
+ static void rga_init_timer(void)
+ {
+ 	kt = ktime_set(0, RGA_TIMER_INTERVAL_NS);
+-	hrtimer_init(&timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+-
+-	timer.function = hrtimer_handler;
++	hrtimer_setup(&timer, hrtimer_handler, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+ 
+ 	hrtimer_start(&timer, kt, HRTIMER_MODE_REL);
+ }
+@@ -1037,7 +1037,8 @@ static long rga_ioctl(struct file *file, uint32_t cmd, unsigned long arg)
+ 		driver_version.major = DRIVER_MAJOR_VERISON;
+ 		driver_version.minor = DRIVER_MINOR_VERSION;
+ 		driver_version.revision = DRIVER_REVISION_VERSION;
+-		strncpy((char *)driver_version.str, DRIVER_VERSION, sizeof(driver_version.str));
++		strscpy_pad((char *)driver_version.str, DRIVER_VERSION,
++			    sizeof(driver_version.str));
+ 
+ 		if (copy_to_user((void *)arg, &driver_version, sizeof(driver_version)))
+ 			ret = -EFAULT;
+@@ -1673,6 +1674,6 @@ MODULE_AUTHOR("putin.li@rock-chips.com");
+ MODULE_DESCRIPTION("Driver for rga device");
+ MODULE_LICENSE("GPL");
+ #ifdef MODULE_IMPORT_NS
+-MODULE_IMPORT_NS(DMA_BUF);
+-MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
++MODULE_IMPORT_NS("DMA_BUF");
++MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
+ #endif
+diff --git a/drivers/video/rockchip/rga3/rga_job.c b/drivers/video/rockchip/rga3/rga_job.c
+index 93e47be000c3..becb6b35938a 100644
+--- a/drivers/video/rockchip/rga3/rga_job.c
++++ b/drivers/video/rockchip/rga3/rga_job.c
+@@ -5,6 +5,8 @@
+  * Author: Huang Lee <Putin.li@rock-chips.com>
+  */
+ 
++#include <linux/version.h>
++
+ #include "rga_job.h"
+ #include "rga_fence.h"
+ #include "rga_dma_buf.h"
+diff --git a/drivers/video/rockchip/rga3/rga_mm.c b/drivers/video/rockchip/rga3/rga_mm.c
+index b130e6e604e8..ec11f3ffa822 100644
+--- a/drivers/video/rockchip/rga3/rga_mm.c
++++ b/drivers/video/rockchip/rga3/rga_mm.c
+@@ -5,6 +5,8 @@
+  * Author: Cerf Yu <cerf.yu@rock-chips.com>
+  */
+ 
++#include <linux/version.h>
++
+ #include "rga.h"
+ #include "rga_job.h"
+ #include "rga_mm.h"
+@@ -38,6 +40,7 @@ static int rga_get_user_pages_from_vma(struct page **pages, unsigned long Memory
+ 	int ret = 0;
+ 	int i;
+ 	struct vm_area_struct *vma;
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+ 	spinlock_t *ptl;
+ 	pte_t *pte;
+ 	pgd_t *pgd;
+@@ -47,6 +50,7 @@ static int rga_get_user_pages_from_vma(struct page **pages, unsigned long Memory
+ 	pud_t *pud;
+ 	pmd_t *pmd;
+ 	unsigned long pfn;
++#endif
+ 
+ 	for (i = 0; i < pageCount; i++) {
+ 		vma = find_vma(current_mm, (Memory + i) << PAGE_SHIFT);
+@@ -56,6 +60,29 @@ static int rga_get_user_pages_from_vma(struct page **pages, unsigned long Memory
+ 			break;
+ 		}
+ 
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
++		/*
++		 * Mainline >= 6.12 unexports pte_offset_map_lock; use the
++		 * exported follow_pfnmap_start()/_end() helpers, which walk
++		 * the page tables internally and also correctly handle
++		 * huge-page leaves at PUD/PMD level.
++		 */
++		{
++			struct follow_pfnmap_args args = {
++				.vma = vma,
++				.address = (Memory + i) << PAGE_SHIFT,
++			};
++
++			if (follow_pfnmap_start(&args)) {
++				rga_err("page[%d] failed to follow pfnmap\n", i);
++				ret = RGA_OUT_OF_RESOURCES;
++				break;
++			}
++
++			pages[i] = pfn_to_page(args.pfn);
++			follow_pfnmap_end(&args);
++		}
++#else
+ 		pgd = pgd_offset(current_mm, (Memory + i) << PAGE_SHIFT);
+ 		if (pgd_none(*pgd) || unlikely(pgd_bad(*pgd))) {
+ 			rga_err("page[%d] failed to get pgd\n", i);
+@@ -102,6 +129,7 @@ static int rga_get_user_pages_from_vma(struct page **pages, unsigned long Memory
+ 		pfn = pte_pfn(*pte);
+ 		pages[i] = pfn_to_page(pfn);
+ 		pte_unmap_unlock(pte, ptl);
++#endif
+ 	}
+ 
+ 	if (ret == RGA_OUT_OF_RESOURCES && i > 0)
+-- 
+2.43.0

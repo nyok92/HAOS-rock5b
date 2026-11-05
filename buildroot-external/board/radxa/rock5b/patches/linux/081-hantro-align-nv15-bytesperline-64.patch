@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Sun, 30 Aug 2026 22:07:13 -0400
+Subject: [PATCH] media: verisilicon: pad the NV15 capture stride to 64 bytes
+
+NV15 carries five bytes per four samples, so its stride is
+width * 5 / 4 -- a multiple of 64 only when the width is a multiple of
+256. A 1920-wide frame gets a 2400-byte stride, and 2400 % 64 is 32.
+
+The decoder does not care. Plain NV15 appears in exactly one format
+list in this driver -- the VPU981 AV1 postprocessor's -- and that
+postprocessor programs av1_pp_out_y_stride, av1_pp_out_c_stride and
+the chroma offset straight from bytesperline, so it writes whatever
+stride the format carries.
+
+The RGA 2D engine does care, and it is the consumer that matters: it
+rejects a blit whose source stride is not 64-byte aligned, and it is
+the only path from a packed 10-bit decoded frame to any other pixel
+format. Without this, hardware scaling, colour conversion and blending
+are unavailable for exactly the widths that are not multiples of 256 --
+1920 among them, so 1080p 10-bit AV1 has no hardware filter path at
+all, while 4K works because 3840 * 5 / 4 happens to land on 4800.
+Decode itself succeeds at every width; only the presentation path is
+lost.
+
+Pad the stride and scale sizeimage with it, before the per-codec
+motion-vector areas are added so they still follow the frame. The
+reference-frame path (hantro_set_reference_frames_format()) is
+untouched: internal reference buffers never leave the decoder, so only
+the CAPTURE format needs the pad. The i.MX8M, Sunxi and STM32 variants
+list only NV15_4L4 and P010_4L4 and are unaffected.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ .../media/platform/verisilicon/hantro_v4l2.c  | 26 +++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/drivers/media/platform/verisilicon/hantro_v4l2.c b/drivers/media/platform/verisilicon/hantro_v4l2.c
+index 83af9fa1c..ca3759965 100644
+--- a/drivers/media/platform/verisilicon/hantro_v4l2.c
++++ b/drivers/media/platform/verisilicon/hantro_v4l2.c
+@@ -366,6 +366,32 @@ static int hantro_try_fmt(const struct hantro_ctx *ctx,
+ 		/* Fill remaining fields */
+ 		v4l2_fill_pixfmt_mp(pix_mp, fmt->fourcc, pix_mp->width,
+ 				    pix_mp->height);
++
++		/*
++		 * Pad the NV15 stride to 64 bytes. NV15 carries five bytes
++		 * per four samples, so on a width that is not a multiple of
++		 * 256 the stride v4l2_fill_pixfmt_mp() computes is not a
++		 * multiple of 64: a 1920-wide frame gets a 2400-byte stride,
++		 * and 2400 % 64 is 32. The decoder is indifferent -- the
++		 * VPU981 postprocessor, the only producer of plain NV15
++		 * here, programs its output strides and the chroma offset
++		 * straight from bytesperline -- but the RGA 2D engine
++		 * rejects a blit whose stride is not 64-byte aligned, and it
++		 * is the only route from a packed 10-bit decoded frame to
++		 * any other pixel format.
++		 */
++		if (fmt->fourcc == V4L2_PIX_FMT_NV15) {
++			struct v4l2_plane_pix_format *plane = &pix_mp->plane_fmt[0];
++			u32 aligned_bpl = ALIGN(plane->bytesperline, 64);
++
++			if (aligned_bpl != plane->bytesperline) {
++				plane->sizeimage = plane->sizeimage /
++						   plane->bytesperline *
++						   aligned_bpl;
++				plane->bytesperline = aligned_bpl;
++			}
++		}
++
+ 		if (ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_H264_SLICE &&
+ 		    !hantro_needs_postproc(ctx, fmt))
+ 			pix_mp->plane_fmt[0].sizeimage +=
+-- 
+2.43.0
