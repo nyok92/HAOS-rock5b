@@ -1,0 +1,134 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 20:51:19 -0400
+Subject: [PATCH] media: verisilicon: raise the VPU981 AV1 frame size limit
+
+The VPU981 AV1 decoder declares 4096x2304 as its maximum frame size, and
+so do the formats on both ends of its capture path.  Nothing in the
+driver derives that number.  Every buffer the decoder sizes for a frame
+scales with the frame: the deblocking, CDEF, superres and loop-restoration
+column buffers are computed from the frame height and the tile column
+count in tiles_reallocate(), and the motion vector storage from the
+superblock count in hantro_av1_mv_size().  The picture dimension registers
+carry no ceiling near it either -- av1_pic_width_in_cbs and
+av1_pic_height_in_cbs are thirteen bits of eight-pixel units, which spans
+far past 8K in both axes.
+
+Raise the limit to 8192x4352, which is the largest frame an AV1 level can
+describe.  Both of the decoder's format lists move, because either one
+alone silently clamps the picture: hantro_try_fmt() applies the
+constraints of whichever format the CAPTURE queue holds, so leaving the
+postprocessor's NV12/NV15/P010 entries at 4K would accept an 8K stream on
+the coded queue and hand back a 4096x2304 frame with no error anywhere.
+The decoder's own NV12_4L4/NV15_4L4 entries move for the same reason on
+the path that skips the postprocessor.
+
+The tile-count bounds are unchanged and stay correct: they are counts, not
+dimensions, and their limits come from the AV1 maxima and from the size of
+the tile_info scratch.  A larger frame does need more tiles -- a tile is at
+most 4096 samples wide and 4096x2304 in area, so an 8K frame needs at least
+four -- but that is far below the 128 the scratch holds.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ .../media/platform/verisilicon/hantro_hw.h    |  2 ++
+ .../platform/verisilicon/rockchip_vpu_hw.c    | 24 +++++++++----------
+ 2 files changed, 14 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/media/platform/verisilicon/hantro_hw.h b/drivers/media/platform/verisilicon/hantro_hw.h
+index 9754672a3..56d17ce27 100644
+--- a/drivers/media/platform/verisilicon/hantro_hw.h
++++ b/drivers/media/platform/verisilicon/hantro_hw.h
+@@ -35,6 +35,8 @@
+ #define FMT_UHD_HEIGHT		2160
+ #define FMT_4K_WIDTH		4096
+ #define FMT_4K_HEIGHT		2304
++#define FMT_8K_WIDTH		8192
++#define FMT_8K_HEIGHT		4352
+ 
+ #define NUM_REF_PICTURES	(V4L2_HEVC_DPB_ENTRIES_NUM_MAX + 1)
+ 
+diff --git a/drivers/media/platform/verisilicon/rockchip_vpu_hw.c b/drivers/media/platform/verisilicon/rockchip_vpu_hw.c
+index 02673be98..ef0f3fccc 100644
+--- a/drivers/media/platform/verisilicon/rockchip_vpu_hw.c
++++ b/drivers/media/platform/verisilicon/rockchip_vpu_hw.c
+@@ -84,10 +84,10 @@ static const struct hantro_fmt rockchip_vpu981_postproc_fmts[] = {
+ 		.postprocessed = true,
+ 		.frmsize = {
+ 			.min_width = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_width = FMT_4K_WIDTH,
++			.max_width = FMT_8K_WIDTH,
+ 			.step_width = MB_DIM,
+ 			.min_height = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_height = FMT_4K_HEIGHT,
++			.max_height = FMT_8K_HEIGHT,
+ 			.step_height = MB_DIM,
+ 		},
+ 	},
+@@ -98,10 +98,10 @@ static const struct hantro_fmt rockchip_vpu981_postproc_fmts[] = {
+ 		.postprocessed = true,
+ 		.frmsize = {
+ 			.min_width = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_width = FMT_4K_WIDTH,
++			.max_width = FMT_8K_WIDTH,
+ 			.step_width = MB_DIM,
+ 			.min_height = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_height = FMT_4K_HEIGHT,
++			.max_height = FMT_8K_HEIGHT,
+ 			.step_height = MB_DIM,
+ 		},
+ 	},
+@@ -112,10 +112,10 @@ static const struct hantro_fmt rockchip_vpu981_postproc_fmts[] = {
+ 		.postprocessed = true,
+ 		.frmsize = {
+ 			.min_width = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_width = FMT_4K_WIDTH,
++			.max_width = FMT_8K_WIDTH,
+ 			.step_width = MB_DIM,
+ 			.min_height = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_height = FMT_4K_HEIGHT,
++			.max_height = FMT_8K_HEIGHT,
+ 			.step_height = MB_DIM,
+ 		},
+ 	},
+@@ -331,10 +331,10 @@ static const struct hantro_fmt rockchip_vpu981_dec_fmts[] = {
+ 		.match_depth = true,
+ 		.frmsize = {
+ 			.min_width = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_width = FMT_4K_WIDTH,
++			.max_width = FMT_8K_WIDTH,
+ 			.step_width = MB_DIM,
+ 			.min_height = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_height = FMT_4K_HEIGHT,
++			.max_height = FMT_8K_HEIGHT,
+ 			.step_height = MB_DIM,
+ 		},
+ 	},
+@@ -344,10 +344,10 @@ static const struct hantro_fmt rockchip_vpu981_dec_fmts[] = {
+ 		.match_depth = true,
+ 		.frmsize = {
+ 			.min_width = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_width = FMT_4K_WIDTH,
++			.max_width = FMT_8K_WIDTH,
+ 			.step_width = MB_DIM,
+ 			.min_height = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_height = FMT_4K_HEIGHT,
++			.max_height = FMT_8K_HEIGHT,
+ 			.step_height = MB_DIM,
+ 		},
+ 	},
+@@ -357,10 +357,10 @@ static const struct hantro_fmt rockchip_vpu981_dec_fmts[] = {
+ 		.max_depth = 2,
+ 		.frmsize = {
+ 			.min_width = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_width = FMT_4K_WIDTH,
++			.max_width = FMT_8K_WIDTH,
+ 			.step_width = MB_DIM,
+ 			.min_height = ROCKCHIP_VPU981_MIN_SIZE,
+-			.max_height = FMT_4K_HEIGHT,
++			.max_height = FMT_8K_HEIGHT,
+ 			.step_height = MB_DIM,
+ 		},
+ 	},
+-- 
+2.43.0
