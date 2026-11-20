@@ -77,6 +77,12 @@ rides exactly this path -- without this fix, a rejected AV1 tile count throws a
 WARN and mis-arms the watchdog to abort an unrelated concurrent decode. Drop
 this when the fix lands upstream.
 
+Rebased onto v7.4-rc3: the device_run() hunk is dropped. In v7.4-rc3
+device_run() no longer enables the clocks itself and already calls
+hantro_job_finish() when ->run() fails, which drops the pm_runtime
+reference and finishes the job once, so there is nothing left to release
+there. The remaining hunks are unchanged.
+
  .../media/platform/verisilicon/hantro_drv.c   | 32 ++++++++++++++++---
  .../platform/verisilicon/hantro_g1_h264_dec.c |  2 +-
  .../verisilicon/hantro_g1_mpeg2_dec.c         |  2 +-
@@ -137,28 +143,6 @@ index 2e81877f6..d9936f697 100644
  	/* Kick the watchdog. */
  	schedule_delayed_work(&ctx->dev->watchdog_work,
  			      msecs_to_jiffies(2000));
-@@ -182,15 +202,19 @@ static void device_run(void *priv)
- 
- 	ret = clk_bulk_enable(ctx->dev->variant->num_clocks, ctx->dev->clocks);
- 	if (ret)
--		goto err_cancel_job;
-+		goto err_pm_put;
- 
- 	v4l2_m2m_buf_copy_metadata(src, dst);
- 
- 	if (ctx->codec_ops->run(ctx))
--		goto err_cancel_job;
-+		goto err_clk_disable;
- 
- 	return;
- 
-+err_clk_disable:
-+	clk_bulk_disable(ctx->dev->variant->num_clocks, ctx->dev->clocks);
-+err_pm_put:
-+	pm_runtime_put_autosuspend(ctx->dev->dev);
- err_cancel_job:
- 	hantro_job_finish_no_pm(ctx->dev, ctx, VB2_BUF_STATE_ERROR);
- }
 diff --git a/drivers/media/platform/verisilicon/hantro_g1_h264_dec.c b/drivers/media/platform/verisilicon/hantro_g1_h264_dec.c
 index ad5c1a663..30c2ac32c 100644
 --- a/drivers/media/platform/verisilicon/hantro_g1_h264_dec.c
@@ -332,4 +316,3 @@ index 00aa566a4..d1b7a21d2 100644
 +	hantro_end_prepare_run(ctx, ret);
  	return ret;
  }
- 
