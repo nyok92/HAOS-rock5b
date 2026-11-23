@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 20:51:37 -0400
+Subject: [PATCH] media: verisilicon: correct the JPEG encoder's maximum frame
+ size
+
+The Rockchip JPEG encoders advertise 8192x8192, one macroblock step more
+than they can encode.  A dimension of exactly 8192 produces a JPEG whose
+SOF marker reads 0x0 in that axis, with no error reported anywhere: the
+encoder runs, the buffer is dequeued, and the picture is unusable.
+
+The frame dimensions reach the hardware as macroblock counts through
+nine-bit register fields -- VEPU_REG_MB_WIDTH() and VEPU_REG_MB_HEIGHT()
+mask with 0x1ff, and the H1 pair occupy nine bits each -- so the largest
+count that survives is 511, and 8192 is 512.  The mask makes it zero
+rather than clamping it, which is why the header ends up describing a
+frame of no size.
+
+Advertise 8176 instead, which is 511 macroblocks and the last size that
+encodes.
+
+Observed on an RK3588 VEPU121 under both GStreamer v4l2jpegenc and FFmpeg.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ drivers/media/platform/verisilicon/rockchip_vpu_hw.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/platform/verisilicon/rockchip_vpu_hw.c b/drivers/media/platform/verisilicon/rockchip_vpu_hw.c
+index ef0f3fccc..f033a624c 100644
+--- a/drivers/media/platform/verisilicon/rockchip_vpu_hw.c
++++ b/drivers/media/platform/verisilicon/rockchip_vpu_hw.c
+@@ -52,10 +52,10 @@ static const struct hantro_fmt rockchip_vpu_enc_fmts[] = {
+ 		.header_size = JPEG_HEADER_SIZE,
+ 		.frmsize = {
+ 			.min_width = 96,
+-			.max_width = 8192,
++			.max_width = 8176,
+ 			.step_width = MB_DIM,
+ 			.min_height = 32,
+-			.max_height = 8192,
++			.max_height = 8176,
+ 			.step_height = MB_DIM,
+ 		},
+ 	},
+-- 
+2.43.0

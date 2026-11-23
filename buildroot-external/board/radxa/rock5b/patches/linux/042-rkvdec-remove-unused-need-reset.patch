@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Detlev Casanova <detlev.casanova@collabora.com>
+Date: Mon, 10 Aug 2026 11:22:12 -0400
+Subject: [PATCH] media: rkvdec: Remove unused need_reset
+
+A left-over from the iommu restore mecanism was forgotten.
+As need_reset is never set to true, the if has no use.
+
+The actual restore function is called above it vase the IRQ isn't in a
+success status.
+
+Signed-off-by: Detlev Casanova <detlev.casanova@collabora.com>
+---
+Detlev Casanova's "media: rkvdec: Enable multi-core support" v2, patch 2/5,
+posted 2026-08-10, state `New` as of 2026-08-13:
+https://patchwork.kernel.org/project/linux-rockchip/list/?series=1143522
+
+Regenerated against this series' base, v7.1.7 (c7ba9d6d); the change is
+identical to the posting.
+
+ drivers/media/platform/rockchip/rkvdec/rkvdec.c | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec.c b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
+index 31ddfcc58..db2731af0 100644
+--- a/drivers/media/platform/rockchip/rkvdec/rkvdec.c
++++ b/drivers/media/platform/rockchip/rkvdec/rkvdec.c
+@@ -1462,7 +1462,6 @@ static irqreturn_t vdpu381_irq_handler(struct rkvdec_ctx *ctx)
+ {
+ 	struct rkvdec_dev *rkvdec = ctx->dev;
+ 	enum vb2_buffer_state state;
+-	bool need_reset = 0;
+ 	u32 status;
+ 
+ 	status = readl(rkvdec->regs + VDPU381_REG_STA_INT);
+@@ -1478,9 +1477,6 @@ static irqreturn_t vdpu381_irq_handler(struct rkvdec_ctx *ctx)
+ 			rkvdec_iommu_restore(rkvdec);
+ 	}
+ 
+-	if (need_reset)
+-		rkvdec_iommu_restore(rkvdec);
+-
+ 	if (cancel_delayed_work(&rkvdec->watchdog_work))
+ 		rkvdec_job_finish(ctx, state);
+ 
+@@ -1491,7 +1487,6 @@ static irqreturn_t vdpu383_irq_handler(struct rkvdec_ctx *ctx)
+ {
+ 	struct rkvdec_dev *rkvdec = ctx->dev;
+ 	enum vb2_buffer_state state;
+-	bool need_reset = 0;
+ 	u32 status;
+ 
+ 	status = readl(rkvdec->link + VDPU383_LINK_STA_INT);
+@@ -1507,9 +1502,6 @@ static irqreturn_t vdpu383_irq_handler(struct rkvdec_ctx *ctx)
+ 		rkvdec_iommu_restore(rkvdec);
+ 	}
+ 
+-	if (need_reset)
+-		rkvdec_iommu_restore(rkvdec);
+-
+ 	if (cancel_delayed_work(&rkvdec->watchdog_work))
+ 		rkvdec_job_finish(ctx, state);
+ 
+-- 
+2.43.0
