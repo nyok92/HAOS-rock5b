@@ -26,11 +26,6 @@ Regenerated against this series' base, v7.1.7 (c7ba9d6d); the change is
 identical to the posting, which was generated against a tree whose rkvdec
 files sit at different line numbers.
 
-The probe error path deletes no gen_pool_destroy() call. 7.3.4 includes
-upstream's removal of it, "media: rkvdec: do not destroy borrowed SRAM
-pool" (19449e913cf0), which the posting's own deletion of those lines
-duplicates. The file this patch produces is the same either way.
-
  .../platform/rockchip/rkvdec/rkvdec-h264.c    |  17 +-
  .../platform/rockchip/rkvdec/rkvdec-hevc.c    |  16 +-
  .../platform/rockchip/rkvdec/rkvdec-rcb.c     |  61 +--
@@ -40,9 +35,9 @@ duplicates. The file this patch produces is the same either way.
  .../rockchip/rkvdec/rkvdec-vdpu383-h264.c     |  24 +-
  .../rockchip/rkvdec/rkvdec-vdpu383-hevc.c     |  26 +-
  .../platform/rockchip/rkvdec/rkvdec-vp9.c     |  27 +-
- .../media/platform/rockchip/rkvdec/rkvdec.c   | 503 ++++++++++++------
+ .../media/platform/rockchip/rkvdec/rkvdec.c   | 506 ++++++++++++------
  .../media/platform/rockchip/rkvdec/rkvdec.h   |  23 +-
- 11 files changed, 472 insertions(+), 280 deletions(-)
+ 11 files changed, 472 insertions(+), 283 deletions(-)
 
 diff --git a/drivers/media/platform/rockchip/rkvdec/rkvdec-h264.c b/drivers/media/platform/rockchip/rkvdec/rkvdec-h264.c
 index d3202cecb..215676c55 100644
@@ -279,9 +274,9 @@ index 191f78278..44df5b6df 100644
  		return 0;
  	}
  
--	ctx->rcb_config = devm_kzalloc(rkvdec->dev, sizeof(*ctx->rcb_config), GFP_KERNEL);
+-	ctx->rcb_config = devm_kzalloc_obj(rkvdec->dev, *ctx->rcb_config);
 -	if (!ctx->rcb_config)
-+	core->rcb_config = devm_kzalloc(core->dev, sizeof(*core->rcb_config), GFP_KERNEL);
++	core->rcb_config = devm_kzalloc_obj(core->dev, *core->rcb_config);
 +	if (!core->rcb_config)
  		return -ENOMEM;
  
@@ -1214,9 +1209,9 @@ index db2731af0..d3b13132b 100644
 -		return -EINVAL;
 +		return dev_err_probe(&pdev->dev, -ENODEV, "failed to get match data\n");
  
--	rkvdec = devm_kzalloc(&pdev->dev, sizeof(*rkvdec), GFP_KERNEL);
+-	rkvdec = devm_kzalloc_obj(&pdev->dev, *rkvdec);
 -	if (!rkvdec)
-+	core = devm_kzalloc(&pdev->dev, sizeof(*core), GFP_KERNEL);
++	core = devm_kzalloc_obj(&pdev->dev, *core);
 +	if (!core)
  		return -ENOMEM;
  
@@ -1254,6 +1249,10 @@ index db2731af0..d3b13132b 100644
 -		rkvdec->regs = devm_platform_ioremap_resource_byname(pdev, "function");
 -		if (IS_ERR(rkvdec->regs))
 -			return PTR_ERR(rkvdec->regs);
+-
+-		rkvdec->link = devm_platform_ioremap_resource_byname(pdev, "link");
+-		if (IS_ERR(rkvdec->link))
+-			return PTR_ERR(rkvdec->link);
 +		core->regs = devm_platform_ioremap_resource_byname(pdev, "function");
 +		if (IS_ERR(core->regs))
 +			return PTR_ERR(core->regs);
@@ -1265,10 +1264,7 @@ index db2731af0..d3b13132b 100644
 +
 +	if (iommu_get_domain_for_dev(&pdev->dev)) {
 +		core->empty_domain = iommu_paging_domain_alloc(core->dev);
- 
--		rkvdec->link = devm_platform_ioremap_resource_byname(pdev, "link");
--		if (IS_ERR(rkvdec->link))
--			return PTR_ERR(rkvdec->link);
++
 +		if (IS_ERR(core->empty_domain)) {
 +			dev_warn(core->dev, "cannot alloc new empty domain\n");
 +			core->empty_domain = NULL;
@@ -1276,17 +1272,17 @@ index db2731af0..d3b13132b 100644
  	}
  
  	ret = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
-@@ -1816,32 +1804,26 @@ static int rkvdec_probe(struct platform_device *pdev)
+@@ -1816,30 +1804,26 @@ static int rkvdec_probe(struct platform_device *pdev)
  
  	ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
  					rkvdec_irq_handler, IRQF_ONESHOT,
 -					dev_name(&pdev->dev), rkvdec);
+-	if (ret)
 +					dev_name(&pdev->dev), core);
- 	if (ret) {
--		dev_err(&pdev->dev, "Could not request vdec IRQ\n");
++	if (ret) {
 +		dev_err(&pdev->dev, "Could not request core IRQ\n");
  		return ret;
- 	}
++	}
  
 -	rkvdec->sram_pool = of_gen_pool_get(pdev->dev.of_node, "sram", 0);
 -	if (!rkvdec->sram_pool && rkvdec->variant->num_rcb_sizes > 0)
@@ -1318,7 +1314,7 @@ index db2731af0..d3b13132b 100644
  	}
  
  	return 0;
-@@ -1849,57 +1831,254 @@ static int rkvdec_probe(struct platform_device *pdev)
+@@ -1849,54 +1831,251 @@ static int rkvdec_probe(struct platform_device *pdev)
  err_disable_runtime_pm:
  	pm_runtime_dont_use_autosuspend(&pdev->dev);
  	pm_runtime_disable(&pdev->dev);
@@ -1348,7 +1344,6 @@ index db2731af0..d3b13132b 100644
 +		iommu_domain_free(core->empty_domain);
  }
  
- #ifdef CONFIG_PM
 -static int rkvdec_runtime_resume(struct device *dev)
 +static int rkvdec_core_runtime_resume(struct device *dev)
  {
@@ -1370,24 +1365,22 @@ index db2731af0..d3b13132b 100644
 -	clk_bulk_disable_unprepare(rkvdec->num_clocks, rkvdec->clocks);
  	return 0;
  }
- #endif
  
 -static const struct dev_pm_ops rkvdec_pm_ops = {
 +static const struct dev_pm_ops rkvdec_core_pm_ops = {
- 	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
- 				pm_runtime_force_resume)
--	SET_RUNTIME_PM_OPS(rkvdec_runtime_suspend, rkvdec_runtime_resume, NULL)
-+	SET_RUNTIME_PM_OPS(rkvdec_core_runtime_suspend,
-+			   rkvdec_core_runtime_resume, NULL)
+ 	SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+-	RUNTIME_PM_OPS(rkvdec_runtime_suspend, rkvdec_runtime_resume, NULL)
++	RUNTIME_PM_OPS(rkvdec_core_runtime_suspend,
++		       rkvdec_core_runtime_resume, NULL)
 +};
 +
 +static struct platform_driver rkvdec_core_pdrv = {
 +	.probe = rkvdec_core_probe,
 +	.remove = rkvdec_core_remove,
 +	.driver = {
-+		   .name = "rkvdec-core",
-+		   .of_match_table = of_rkvdec_match,
-+		   .pm = &rkvdec_core_pm_ops,
++		.name = "rkvdec-core",
++		.of_match_table = of_rkvdec_match,
++		.pm = pm_ptr(&rkvdec_core_pm_ops),
 +	},
 +};
 +
@@ -1456,7 +1449,7 @@ index db2731af0..d3b13132b 100644
 +		return dev_err_probe(dev, -ENODEV,
 +				     "no matching available component devices found\n");
 +
-+	rkvdec = devm_kzalloc(dev, sizeof(*rkvdec), GFP_KERNEL);
++	rkvdec = devm_kzalloc_obj(dev, *rkvdec);
 +	if (!rkvdec)
 +		return -ENOMEM;
 +
@@ -1482,7 +1475,7 @@ index db2731af0..d3b13132b 100644
  	.driver = {
 -		   .name = "rkvdec",
 -		   .of_match_table = of_rkvdec_match,
--		   .pm = &rkvdec_pm_ops,
+-		   .pm = pm_ptr(&rkvdec_pm_ops),
 +		.name = "rkvdec",
  	},
  };
