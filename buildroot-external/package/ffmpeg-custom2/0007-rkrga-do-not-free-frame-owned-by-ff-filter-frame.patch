@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 13:00:00 -0400
+Subject: [PATCH] lavfi/rkrga: do not free a frame ff_filter_frame() has taken
+
+Both async delivery sites free the output frame when delivery fails:
+
+    filter_ret = r->filter_frame(outlink, aframe.dst->frame);
+    if (filter_ret < 0) {
+        av_frame_free(&aframe.dst->frame);
+
+ff_filter_frame() owns the frame from the moment it is called. Its contract
+says so -- "The receiving filter is responsible for unreferencing frame in
+case of error" -- and its implementation does so on every negative return,
+both the format-mismatch path and a ff_framequeue_add() failure. It frees
+its own parameter, which leaves the caller's pointer dangling rather than
+NULL, so av_frame_free() on it is a use-after-free followed by a second
+free of the AVFrame allocation.
+
+Drop the reference unconditionally, and account for it: the frame has left
+the queue whether or not delivery succeeded, so `queued` must be
+decremented on the error path too, which it previously was not.
+
+r->filter_frame is always ff_filter_frame here -- vf_vpp_rkrga and
+vf_overlay_rkrga both leave param.filter_frame NULL and ff_rkrga_init()
+substitutes it -- so there is no override with different ownership rules.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ libavfilter/rkrga_common.c | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/libavfilter/rkrga_common.c b/libavfilter/rkrga_common.c
+index 8fe3a7c..1ca7d39 100644
+--- a/libavfilter/rkrga_common.c
++++ b/libavfilter/rkrga_common.c
+@@ -1340,13 +1340,13 @@ int ff_rkrga_filter_frame(RKRGAContext *r,
+         set_rga_async_frame_lock_status(&aframe, 0);
+ 
+         filter_ret = r->filter_frame(outlink, aframe.dst->frame);
+-        if (filter_ret < 0) {
+-            av_frame_free(&aframe.dst->frame);
+-            return filter_ret;
+-        }
++        /* ff_filter_frame() consumes the frame on every path, its error paths
++         * included, so drop our reference to it before looking at the result. */
++        aframe.dst->frame = NULL;
+         aframe.dst->queued--;
++        if (filter_ret < 0)
++            return filter_ret;
+         r->got_frame = 1;
+-        aframe.dst->frame = NULL;
+     }
+ 
+     if (!picref_src)
+@@ -1437,13 +1437,13 @@ int ff_rkrga_filter_frame(RKRGAContext *r,
+         set_rga_async_frame_lock_status(&aframe, 0);
+ 
+         filter_ret = r->filter_frame(outlink, aframe.dst->frame);
+-        if (filter_ret < 0) {
+-            av_frame_free(&aframe.dst->frame);
+-            return filter_ret;
+-        }
++        /* ff_filter_frame() consumes the frame on every path, its error paths
++         * included, so drop our reference to it before looking at the result. */
++        aframe.dst->frame = NULL;
+         aframe.dst->queued--;
++        if (filter_ret < 0)
++            return filter_ret;
+         r->got_frame = 1;
+-        aframe.dst->frame = NULL;
+     }
+ 
+     return 0;
+-- 
+2.43.0

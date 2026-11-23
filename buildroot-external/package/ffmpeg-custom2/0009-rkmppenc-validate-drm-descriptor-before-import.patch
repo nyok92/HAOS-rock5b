@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 13:10:00 -0400
+Subject: [PATCH] lavc/rkmppenc: validate the DRM descriptor before importing
+ it
+
+rkmpp_set_drm_frame() read desc->layers[0], that layer's planes[0] and
+planes[1], and desc->objects[0] without checking any of the counts that say
+those exist, and without checking where the planes actually live.
+
+Three consequences, all reachable from a producer that shapes its
+descriptor differently to this build's own hwcontext:
+
+ - nb_layers or nb_planes below what is indexed reads uninitialised
+   descriptor memory and encodes from it;
+ - planes[0].pitch of zero makes `layer->planes[1].offset / stride` a
+   division by zero, which is SIGFPE, not an error return;
+ - a frame whose planes live in more than one dma-buf imported only
+   object 0, silently encoding whatever occupied the chroma offset in it.
+
+Check the counts before indexing, reject a non-positive stride, and reject
+a multi-object frame with ENOSYS -- MPP is handed a single buffer here, so
+that shape is unsupported rather than malformed.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ libavcodec/rkmppenc.c | 25 ++++++++++++++++++++++++-
+ 1 file changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/libavcodec/rkmppenc.c b/libavcodec/rkmppenc.c
+index 09501f0..a8d9db5 100644
+--- a/libavcodec/rkmppenc.c
++++ b/libavcodec/rkmppenc.c
+@@ -377,9 +377,32 @@ static int rkmpp_set_hw_frame(AVCodecContext *avctx, MppFrame frame)
+ 
+ 
+     const AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *)ctx->frame->data[0];
+-    const AVDRMLayerDescriptor *layer = &desc->layers[0];
++    const AVDRMLayerDescriptor *layer;
++
++    /* The descriptor is externally supplied -- a producer other than this
++     * build's own hwcontext may shape it differently -- so its counts are
++     * checked before its arrays are read. */
++    if (!desc || desc->nb_objects < 1 || desc->nb_layers < 1)
++        return AVERROR(EINVAL);
++
++    layer = &desc->layers[0];
++    if (layer->nb_planes < 2)
++        return AVERROR(EINVAL);
++
++    /* MPP is handed one dma-buf, so every plane must live in the object that
++     * is handed over. Importing object 0 for a frame whose chroma is in
++     * object 1 encodes whatever else happens to be at that offset. */
++    for (int i = 0; i < layer->nb_planes; i++) {
++        if (layer->planes[i].object_index != 0) {
++            av_log(avctx, AV_LOG_ERROR, "DRM frames split across multiple objects "
++                   "are not supported\n");
++            return AVERROR(ENOSYS);
++        }
++    }
+ 
+     int stride = layer->planes[0].pitch;
++    if (stride <= 0)
++        return AVERROR(EINVAL);
+     int vertical = layer->planes[1].offset / stride;
+     if (stride != ctx->mpp_stride || vertical != ctx->mpp_height) {
+         // Update stride info
+-- 
+2.43.0

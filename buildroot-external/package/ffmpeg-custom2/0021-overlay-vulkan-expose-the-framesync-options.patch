@@ -1,0 +1,294 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 22:57:31 -0400
+Subject: [PATCH] lavfi/overlay_vulkan: expose the framesync options
+
+The filter drives framesync but publishes only x and y, so eof_action,
+shortest and repeatlast are unreachable and framesync's own defaults
+stand: eof_action=repeat, which extends the overlay branch past its
+last frame for as long as the main branch runs.
+
+That is the wrong default for an unbounded overlay source. alphasrc
+never ends, so with no way to say shortest=1 or eof_action=endall the
+graph keeps compositing after the main input is exhausted and the
+filter emits forever. Every other overlay in the tree - overlay,
+overlay_vaapi, overlay_cuda, overlay_qsv - carries these three
+options for exactly this reason.
+
+Publish them the way those filters do: the three entries in the option
+array, FRAMESYNC_DEFINE_CLASS() so the framesync child class is
+reachable for inspection, and the preinit callback the macro requires
+to initialise the FFFrameSync before options are applied.
+
+Two of those values reach a case the blend did not handle. With
+eof_action=pass or repeatlast=0, framesync hands it a NULL overlay once
+the overlay input has ended, and it does so before the overlay's first
+frame whatever the options. The blend returned without output for every
+such event, so main frames were dropped instead of passed through. A
+second shader, overlay_pass, copies the main input alone, and the blend
+dispatches it whenever there is no overlay frame. The overlay's size and
+the format check move from the first overlay frame to the links, so the
+filter can start on main frames that arrive before any overlay does, and
+the output frame starts NULL because the error path frees it.
+jellyfin-ffmpeg's 0082 takes the same approach with a shader compiled at
+run time; this one is compiled with the others at build time.
+
+On lavapipe, with a 90-frame main and a 30-frame overlay, eof_action=pass
+and repeatlast=0 each produced 30 frames before this change and 90 after,
+and the 60 passed-through frames equal the main input byte for byte. An
+overlay that starts one second late lost the main's first 30 frames
+under the default options too; they now pass through unchanged.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ doc/filters.texi                          |  2 +
+ libavfilter/vf_overlay_vulkan.c           | 90 ++++++++++++++++++-----
+ libavfilter/vulkan/Makefile               |  3 +-
+ libavfilter/vulkan/overlay_pass.comp.glsl | 40 ++++++++++
+ 4 files changed, 115 insertions(+), 20 deletions(-)
+ create mode 100644 libavfilter/vulkan/overlay_pass.comp.glsl
+
+diff --git a/doc/filters.texi b/doc/filters.texi
+index f76d69e2f3..12257a4bad 100644
+--- a/doc/filters.texi
++++ b/doc/filters.texi
+@@ -30053,6 +30053,8 @@ Default value is @code{0}.
+ 
+ @end table
+ 
++The @code{overlay_vulkan} filter also supports the @ref{framesync} options.
++
+ @section transpose_vulkan
+ 
+ Transpose rows with columns in the input video and optionally flip it.
+diff --git a/libavfilter/vf_overlay_vulkan.c b/libavfilter/vf_overlay_vulkan.c
+index 199b6f40c1..5359e7bfe4 100644
+--- a/libavfilter/vf_overlay_vulkan.c
++++ b/libavfilter/vf_overlay_vulkan.c
+@@ -28,6 +28,9 @@
+ extern const unsigned char ff_overlay_comp_spv_data[];
+ extern const unsigned int ff_overlay_comp_spv_len;
+ 
++extern const unsigned char ff_overlay_pass_comp_spv_data[];
++extern const unsigned int ff_overlay_pass_comp_spv_len;
++
+ typedef struct OverlayVulkanContext {
+     FFVulkanContext vkctx;
+     FFFrameSync fs;
+@@ -36,6 +39,8 @@ typedef struct OverlayVulkanContext {
+     FFVkExecPool e;
+     AVVulkanDeviceQueueFamily *qf;
+     FFVulkanShader shd;
++    /* Copies the main input alone, for an event that has no overlay frame. */
++    FFVulkanShader shd_pass;
+ 
+     /* Push constants / options */
+     struct {
+@@ -103,6 +108,29 @@ static av_cold int init_filter(AVFilterContext *ctx)
+ 
+     RET(ff_vk_shader_register_exec(vkctx, &s->e, &s->shd));
+ 
++    ff_vk_shader_load(&s->shd_pass, VK_SHADER_STAGE_COMPUTE_BIT, NULL,
++                      (uint32_t []) { 32, 8, planes }, 0);
++
++    const FFVulkanDescriptorSetBinding desc_pass[] = {
++        { /* main_img */
++            .type   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
++            .stages = VK_SHADER_STAGE_COMPUTE_BIT,
++            .elems  = planes,
++        },
++        { /* output_img */
++            .type   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
++            .stages = VK_SHADER_STAGE_COMPUTE_BIT,
++            .elems  = planes,
++        },
++    };
++    ff_vk_shader_add_descriptor_set(vkctx, &s->shd_pass, desc_pass, 2, 0);
++
++    RET(ff_vk_shader_link(vkctx, &s->shd_pass,
++                          ff_overlay_pass_comp_spv_data,
++                          ff_overlay_pass_comp_spv_len, "main"));
++
++    RET(ff_vk_shader_register_exec(vkctx, &s->e, &s->shd_pass));
++
+     s->opts.o_offset[0] = s->overlay_x;
+     s->opts.o_offset[1] = s->overlay_y;
+     s->opts.o_offset[2] = s->opts.o_offset[0] >> pix_desc->log2_chroma_w;
+@@ -129,7 +157,7 @@ static int overlay_vulkan_blend(FFFrameSync *fs)
+     AVFilterContext *ctx = fs->parent;
+     OverlayVulkanContext *s = ctx->priv;
+     AVFilterLink *outlink = ctx->outputs[0];
+-    AVFrame *input_main, *input_overlay, *out;
++    AVFrame *input_main, *input_overlay, *out = NULL;
+ 
+     err = ff_framesync_get_frame(fs, 0, &input_main, 0);
+     if (err < 0)
+@@ -138,22 +166,16 @@ static int overlay_vulkan_blend(FFFrameSync *fs)
+     if (err < 0)
+         goto fail;
+ 
+-    if (!input_main || !input_overlay)
+-        return 0;
+-
+-    if (!s->initialized) {
+-        AVHWFramesContext *main_fc = (AVHWFramesContext*)input_main->hw_frames_ctx->data;
+-        AVHWFramesContext *overlay_fc = (AVHWFramesContext*)input_overlay->hw_frames_ctx->data;
+-        if (main_fc->sw_format != overlay_fc->sw_format) {
+-            av_log(ctx, AV_LOG_ERROR, "Mismatching sw formats!\n");
+-            return AVERROR(EINVAL);
+-        }
+-
+-        s->overlay_w = input_overlay->width;
+-        s->overlay_h = input_overlay->height;
++    /*
++     * framesync always has a main frame here, but the overlay is NULL before
++     * its first frame and, with eof_action=pass or repeatlast=0, after its
++     * last. The main frame still goes out, unchanged.
++     */
++    if (!input_main)
++        return AVERROR_BUG;
+ 
++    if (!s->initialized)
+         RET(init_filter(ctx));
+-    }
+ 
+     out = ff_get_video_buffer(outlink, outlink->w, outlink->h);
+     if (!out) {
+@@ -161,9 +183,14 @@ static int overlay_vulkan_blend(FFFrameSync *fs)
+         goto fail;
+     }
+ 
+-    RET(ff_vk_filter_process_Nin(&s->vkctx, &s->e, &s->shd,
+-                                 out, (AVFrame *[]){ input_main, input_overlay }, 2,
+-                                 VK_NULL_HANDLE, 1, &s->opts, sizeof(s->opts)));
++    if (input_overlay)
++        RET(ff_vk_filter_process_Nin(&s->vkctx, &s->e, &s->shd,
++                                     out, (AVFrame *[]){ input_main, input_overlay }, 2,
++                                     VK_NULL_HANDLE, 1, &s->opts, sizeof(s->opts)));
++    else
++        RET(ff_vk_filter_process_simple(&s->vkctx, &s->e, &s->shd_pass,
++                                        out, input_main, VK_NULL_HANDLE, 1,
++                                        NULL, 0));
+ 
+     err = av_frame_copy_props(out, input_main);
+     if (err < 0)
+@@ -181,6 +208,21 @@ static int overlay_vulkan_config_output(AVFilterLink *outlink)
+     int err;
+     AVFilterContext *avctx = outlink->src;
+     OverlayVulkanContext *s = avctx->priv;
++    AVFilterLink *main_link = avctx->inputs[0];
++    AVFilterLink *overlay_link = avctx->inputs[1];
++    AVHWFramesContext *main_fc =
++        (AVHWFramesContext *)ff_filter_link(main_link)->hw_frames_ctx->data;
++    AVHWFramesContext *overlay_fc =
++        (AVHWFramesContext *)ff_filter_link(overlay_link)->hw_frames_ctx->data;
++
++    /* Taken from the links rather than from the first overlay frame, so the
++     * filter can start on main frames that arrive before any overlay does. */
++    if (main_fc->sw_format != overlay_fc->sw_format) {
++        av_log(avctx, AV_LOG_ERROR, "Mismatching sw formats!\n");
++        return AVERROR(EINVAL);
++    }
++    s->overlay_w = overlay_link->w;
++    s->overlay_h = overlay_link->h;
+ 
+     err = ff_vk_filter_config_output(outlink);
+     if (err < 0)
+@@ -220,6 +262,7 @@ static void overlay_vulkan_uninit(AVFilterContext *avctx)
+ 
+     ff_vk_exec_pool_free(vkctx, &s->e);
+     ff_vk_shader_free(vkctx, &s->shd);
++    ff_vk_shader_free(vkctx, &s->shd_pass);
+ 
+     ff_vk_uninit(&s->vkctx);
+     ff_framesync_uninit(&s->fs);
+@@ -232,10 +275,18 @@ static void overlay_vulkan_uninit(AVFilterContext *avctx)
+ static const AVOption overlay_vulkan_options[] = {
+     { "x", "Set horizontal offset", OFFSET(overlay_x), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, .flags = FLAGS },
+     { "y", "Set vertical offset",   OFFSET(overlay_y), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, .flags = FLAGS },
++    { "eof_action", "Action to take when encountering EOF from secondary input ",
++        OFFSET(fs.opt_eof_action), AV_OPT_TYPE_INT, { .i64 = EOF_ACTION_REPEAT },
++        EOF_ACTION_REPEAT, EOF_ACTION_PASS, .flags = FLAGS, .unit = "eof_action" },
++        { "repeat", "Repeat the previous frame.",   0, AV_OPT_TYPE_CONST, { .i64 = EOF_ACTION_REPEAT }, .flags = FLAGS, .unit = "eof_action" },
++        { "endall", "End both streams.",            0, AV_OPT_TYPE_CONST, { .i64 = EOF_ACTION_ENDALL }, .flags = FLAGS, .unit = "eof_action" },
++        { "pass",   "Pass through the main input.", 0, AV_OPT_TYPE_CONST, { .i64 = EOF_ACTION_PASS },   .flags = FLAGS, .unit = "eof_action" },
++    { "shortest", "force termination when the shortest input terminates", OFFSET(fs.opt_shortest),   AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, FLAGS },
++    { "repeatlast", "repeat overlay of the last overlay frame",           OFFSET(fs.opt_repeatlast), AV_OPT_TYPE_BOOL, { .i64 = 1 }, 0, 1, FLAGS },
+     { NULL },
+ };
+ 
+-AVFILTER_DEFINE_CLASS(overlay_vulkan);
++FRAMESYNC_DEFINE_CLASS(overlay_vulkan, OverlayVulkanContext, fs);
+ 
+ static const AVFilterPad overlay_vulkan_inputs[] = {
+     {
+@@ -267,6 +318,7 @@ const FFFilter ff_vf_overlay_vulkan = {
+     .init           = &overlay_vulkan_init,
+     .uninit         = &overlay_vulkan_uninit,
+     .activate       = &overlay_vulkan_activate,
++    .preinit        = overlay_vulkan_framesync_preinit,
+     FILTER_INPUTS(overlay_vulkan_inputs),
+     FILTER_OUTPUTS(overlay_vulkan_outputs),
+     FILTER_SINGLE_PIXFMT(AV_PIX_FMT_VULKAN),
+diff --git a/libavfilter/vulkan/Makefile b/libavfilter/vulkan/Makefile
+index 55de033d6b..4e785726e9 100644
+--- a/libavfilter/vulkan/Makefile
++++ b/libavfilter/vulkan/Makefile
+@@ -11,7 +11,8 @@ OBJS-$(CONFIG_GBLUR_VULKAN_FILTER) += vulkan/gblur.comp.spv.o
+ OBJS-$(CONFIG_SCALE_VULKAN_FILTER) += vulkan/scale.comp.spv.o \
+                                       vulkan/debayer.comp.spv.o
+ OBJS-$(CONFIG_SCDET_VULKAN_FILTER) += vulkan/scdet.comp.spv.o
+-OBJS-$(CONFIG_OVERLAY_VULKAN_FILTER) += vulkan/overlay.comp.spv.o
++OBJS-$(CONFIG_OVERLAY_VULKAN_FILTER) += vulkan/overlay.comp.spv.o \
++                                       vulkan/overlay_pass.comp.spv.o
+ OBJS-$(CONFIG_FLIP_VULKAN_FILTER) += vulkan/flip.comp.spv.o
+ OBJS-$(CONFIG_FRUC_VULKAN_FILTER) += vulkan/fruc_grayscale.comp.spv.o \
+                                      vulkan/fruc_interpolate.comp.spv.o
+diff --git a/libavfilter/vulkan/overlay_pass.comp.glsl b/libavfilter/vulkan/overlay_pass.comp.glsl
+new file mode 100644
+index 0000000000..8a27c0f264
+--- /dev/null
++++ b/libavfilter/vulkan/overlay_pass.comp.glsl
+@@ -0,0 +1,40 @@
++/*
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#pragma shader_stage(compute)
++
++#extension GL_EXT_shader_image_load_formatted : require
++#extension GL_EXT_nonuniform_qualifier : require
++
++layout (local_size_x_id = 253, local_size_y_id = 254, local_size_z_id = 255) in;
++
++layout (set = 0, binding = 0) uniform readonly  image2D main_img[];
++layout (set = 0, binding = 1) uniform writeonly image2D output_img[];
++
++/* The main input alone, for a frame with no overlay frame to blend. */
++void main()
++{
++    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
++    uint plane = gl_LocalInvocationID.z;
++
++    if (any(greaterThanEqual(pos, imageSize(output_img[nonuniformEXT(plane)]))))
++        return;
++
++    imageStore(output_img[nonuniformEXT(plane)], pos,
++               imageLoad(main_img[nonuniformEXT(plane)], pos));
++}
+-- 
+2.43.0

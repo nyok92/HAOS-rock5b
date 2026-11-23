@@ -1,0 +1,229 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Mon, 31 Aug 2026 14:03:25 -0400
+Subject: [PATCH] avcodec/v4l2_m2m: negotiate the formats a driver actually
+ offers
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Two places assume ffmpeg's own first choice of V4L2 fourcc is the only
+one a driver could name a format by. Both refuse drivers that pick
+differently, and one of them does so silently.
+
+On the coded queue, v4l2_get_coded_format() translated the codec id to
+a single fourcc and then required VIDIOC_ENUM_FMT to produce exactly
+that one. AV_CODEC_ID_MJPEG maps to V4L2_PIX_FMT_MJPEG and to
+V4L2_PIX_FMT_JPEG, in that order, so a driver that enumerates only
+V4L2_PIX_FMT_JPEG — as the RK3588 VEPU121 JPEG encoder does — was
+rejected outright. Walk what the driver offers instead and take the
+first entry that carries the codec.
+
+On the raw queue, v4l2_try_raw_format() offered one fourcc per pixel
+format and treated a successful VIDIOC_TRY_FMT as agreement. A driver
+that cannot do the requested fourcc must substitute one it can and
+still succeed, so success proves nothing on its own: asking a
+multiplanar queue for V4L2_PIX_FMT_NV12 when it wants
+V4L2_PIX_FMT_NV12M returned 0 with the format quietly changed, and the
+caller went on believing it had NV12. Compare the fourcc that comes
+back, and offer each fourcc a pixel format has — the contiguous one and
+the non-contiguous multiplanar one — until the driver keeps one.
+
+The enumeration fallback had the matching problem in reverse: it
+mapped an enumerated fourcc to a pixel format and then asked for that
+pixel format's *first* fourcc, which need not be the one just
+enumerated. Offer the driver its own fourcc back.
+
+Nothing changes for a driver whose fourccs are the ones ffmpeg lists
+first, which is every V4L2 M2M codec that worked before.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ libavcodec/v4l2_context.c | 62 +++++++++++++++++++++++++++------------
+ libavcodec/v4l2_fmt.c     | 15 +++++-----
+ libavcodec/v4l2_fmt.h     | 22 ++++++++++++--
+ 3 files changed, 70 insertions(+), 29 deletions(-)
+
+diff --git a/libavcodec/v4l2_context.c b/libavcodec/v4l2_context.c
+index be1df3785b..7ee0ea8762 100644
+--- a/libavcodec/v4l2_context.c
++++ b/libavcodec/v4l2_context.c
+@@ -464,15 +464,18 @@ static int v4l2_release_buffers(V4L2Context* ctx)
+     return ioctl(ctx_to_m2mctx(ctx)->fd, VIDIOC_REQBUFS, &req);
+ }
+ 
+-static inline int v4l2_try_raw_format(V4L2Context* ctx, enum AVPixelFormat pixfmt)
++/**
++ * Offer one V4L2 fourcc to the driver and report whether it took it.
++ *
++ * A driver that cannot do the requested fourcc is required to substitute one
++ * it can and still succeed, so a successful VIDIOC_TRY_FMT is not by itself an
++ * answer: compare what came back. On success ctx->format holds the driver's
++ * completed description of the format, which is what the caller goes on to
++ * VIDIOC_S_FMT.
++ */
++static inline int v4l2_try_raw_v4l2_fmt(V4L2Context* ctx, uint32_t v4l2_fmt)
+ {
+     struct v4l2_format *fmt = &ctx->format;
+-    uint32_t v4l2_fmt;
+-    int ret;
+-
+-    v4l2_fmt = ff_v4l2_format_avfmt_to_v4l2(pixfmt);
+-    if (!v4l2_fmt)
+-        return AVERROR(EINVAL);
+ 
+     if (V4L2_TYPE_IS_MULTIPLANAR(ctx->type))
+         fmt->fmt.pix_mp.pixelformat = v4l2_fmt;
+@@ -481,13 +484,33 @@ static inline int v4l2_try_raw_format(V4L2Context* ctx, enum AVPixelFormat pixfm
+ 
+     fmt->type = ctx->type;
+ 
+-    ret = ioctl(ctx_to_m2mctx(ctx)->fd, VIDIOC_TRY_FMT, fmt);
+-    if (ret)
++    if (ioctl(ctx_to_m2mctx(ctx)->fd, VIDIOC_TRY_FMT, fmt))
++        return AVERROR(EINVAL);
++
++    if ((V4L2_TYPE_IS_MULTIPLANAR(ctx->type) ? fmt->fmt.pix_mp.pixelformat
++                                             : fmt->fmt.pix.pixelformat) != v4l2_fmt)
+         return AVERROR(EINVAL);
+ 
+     return 0;
+ }
+ 
++static inline int v4l2_try_raw_format(V4L2Context* ctx, enum AVPixelFormat pixfmt)
++{
++    unsigned int i = 0;
++    uint32_t v4l2_fmt;
++
++    /* One pixel format reaches a driver under several fourccs — a contiguous
++     * one and a non-contiguous multiplanar one — and a multiplanar queue
++     * usually takes only the latter. Offer each in turn rather than assuming
++     * the first. */
++    while ((v4l2_fmt = ff_v4l2_format_avfmt_to_v4l2_next(pixfmt, &i))) {
++        if (!v4l2_try_raw_v4l2_fmt(ctx, v4l2_fmt))
++            return 0;
++    }
++
++    return AVERROR(EINVAL);
++}
++
+ static int v4l2_get_raw_format(V4L2Context* ctx, enum AVPixelFormat *p)
+ {
+     enum AVPixelFormat pixfmt = ctx->av_pix_fmt;
+@@ -509,7 +532,11 @@ static int v4l2_get_raw_format(V4L2Context* ctx, enum AVPixelFormat *p)
+             return AVERROR(EINVAL);
+ 
+         pixfmt = ff_v4l2_format_v4l2_to_avfmt(fdesc.pixelformat, AV_CODEC_ID_RAWVIDEO);
+-        ret = v4l2_try_raw_format(ctx, pixfmt);
++        /* Offer back the driver's own fourcc: going through the pixel format
++         * would ask for whichever fourcc ffmpeg lists first for it, which need
++         * not be the one just enumerated. */
++        ret = pixfmt == AV_PIX_FMT_NONE ? AVERROR(EINVAL)
++                                        : v4l2_try_raw_v4l2_fmt(ctx, fdesc.pixelformat);
+         if (ret){
+             fdesc.index++;
+             continue;
+@@ -526,15 +553,12 @@ static int v4l2_get_raw_format(V4L2Context* ctx, enum AVPixelFormat *p)
+ static int v4l2_get_coded_format(V4L2Context* ctx, uint32_t *p)
+ {
+     struct v4l2_fmtdesc fdesc;
+-    uint32_t v4l2_fmt;
+     int ret;
+ 
+-    /* translate to a valid v4l2 format */
+-    v4l2_fmt = ff_v4l2_format_avcodec_to_v4l2(ctx->av_codec_id);
+-    if (!v4l2_fmt)
+-        return AVERROR(EINVAL);
+-
+-    /* check if the driver supports this format */
++    /* Take the first format the driver offers that carries this codec. A
++     * codec id can map to several fourccs — MJPEG is both V4L2_PIX_FMT_MJPEG
++     * and V4L2_PIX_FMT_JPEG — so insisting on ffmpeg's own first choice
++     * refuses drivers that name the codec by the other one. */
+     memset(&fdesc, 0, sizeof(fdesc));
+     fdesc.type = ctx->type;
+ 
+@@ -543,13 +567,13 @@ static int v4l2_get_coded_format(V4L2Context* ctx, uint32_t *p)
+         if (ret)
+             return AVERROR(EINVAL);
+ 
+-        if (fdesc.pixelformat == v4l2_fmt)
++        if (ff_v4l2_format_v4l2_matches_avcodec(fdesc.pixelformat, ctx->av_codec_id))
+             break;
+ 
+         fdesc.index++;
+     }
+ 
+-    *p = v4l2_fmt;
++    *p = fdesc.pixelformat;
+ 
+     return 0;
+ }
+diff --git a/libavcodec/v4l2_fmt.c b/libavcodec/v4l2_fmt.c
+index 6df47e3f5a..9f42e9e97e 100644
+--- a/libavcodec/v4l2_fmt.c
++++ b/libavcodec/v4l2_fmt.c
+@@ -109,22 +109,21 @@ static const struct fmt_conversion {
+ #endif
+ };
+ 
+-uint32_t ff_v4l2_format_avcodec_to_v4l2(enum AVCodecID avcodec)
++int ff_v4l2_format_v4l2_matches_avcodec(uint32_t v4l2_fmt, enum AVCodecID avcodec)
+ {
+     int i;
+     for (i = 0; i < FF_ARRAY_ELEMS(fmt_map); i++) {
+-        if (fmt_map[i].avcodec == avcodec)
+-            return fmt_map[i].v4l2_fmt;
++        if (fmt_map[i].avcodec == avcodec && fmt_map[i].v4l2_fmt == v4l2_fmt)
++            return 1;
+     }
+     return 0;
+ }
+ 
+-uint32_t ff_v4l2_format_avfmt_to_v4l2(enum AVPixelFormat avfmt)
++uint32_t ff_v4l2_format_avfmt_to_v4l2_next(enum AVPixelFormat avfmt, unsigned int *i)
+ {
+-    int i;
+-    for (i = 0; i < FF_ARRAY_ELEMS(fmt_map); i++) {
+-        if (fmt_map[i].avfmt == avfmt)
+-            return fmt_map[i].v4l2_fmt;
++    for (; *i < FF_ARRAY_ELEMS(fmt_map); (*i)++) {
++        if (fmt_map[*i].avfmt == avfmt)
++            return fmt_map[(*i)++].v4l2_fmt;
+     }
+     return 0;
+ }
+diff --git a/libavcodec/v4l2_fmt.h b/libavcodec/v4l2_fmt.h
+index 577e03a7a7..f846a69ba3 100644
+--- a/libavcodec/v4l2_fmt.h
++++ b/libavcodec/v4l2_fmt.h
+@@ -29,7 +29,25 @@
+ #include "codec_id.h"
+ 
+ enum AVPixelFormat ff_v4l2_format_v4l2_to_avfmt(uint32_t v4l2_fmt, enum AVCodecID avcodec);
+-uint32_t ff_v4l2_format_avcodec_to_v4l2(enum AVCodecID avcodec);
+-uint32_t ff_v4l2_format_avfmt_to_v4l2(enum AVPixelFormat avfmt);
++
++/**
++ * Whether a V4L2 fourcc is one of those a codec id is carried in. A codec can
++ * have more than one: MJPEG is both V4L2_PIX_FMT_MJPEG and V4L2_PIX_FMT_JPEG,
++ * and only the driver knows which of them it speaks.
++ */
++int ff_v4l2_format_v4l2_matches_avcodec(uint32_t v4l2_fmt, enum AVCodecID avcodec);
++
++/**
++ * Iterate the V4L2 fourccs a pixel format is carried in, so a caller can offer
++ * a driver each in turn. A pixel format usually has both a contiguous and a
++ * non-contiguous multiplanar fourcc (NV12 and NV12M), and only one of them
++ * suits a given queue.
++ *
++ * @param avfmt the pixel format to look up
++ * @param i     iteration state, set to 0 before the first call
++ *
++ * @return the next fourcc, or 0 once they are exhausted
++ */
++uint32_t ff_v4l2_format_avfmt_to_v4l2_next(enum AVPixelFormat avfmt, unsigned int *i);
+ 
+ #endif /* AVCODEC_V4L2_FMT_H*/
+-- 
+2.43.0

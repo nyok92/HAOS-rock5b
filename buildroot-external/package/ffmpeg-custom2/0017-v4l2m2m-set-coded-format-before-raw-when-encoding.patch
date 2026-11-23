@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Mon, 31 Aug 2026 14:02:19 -0400
+Subject: [PATCH] avcodec/v4l2_m2m: set the coded format before the raw one
+ when encoding
+
+The V4L2 stateful encoder interface has the client set the coded format
+on CAPTURE first, then the raw format on OUTPUT: a driver derives its
+raw format from the coded one, and is explicitly allowed to reset
+OUTPUT whenever CAPTURE is set. Setting OUTPUT first therefore
+negotiates a pixel format that the following CAPTURE S_FMT throws away.
+
+hantro does exactly that. hantro_set_fmt_cap() on an encoder calls
+hantro_reset_raw_fmt(), which reinstates the driver's default raw
+format, so on the RK3588 VEPU121 JPEG encoder an application that asks
+for NM12 ends up with the hardware in YM12 while its own cached
+v4l2_format still says NM12. Nothing fails: the encoder reads the
+frame's chroma with the wrong plane layout and emits a picture with
+corrupt colour.
+
+Set the coded queue first and the raw queue second. Decoding is the
+same rule with the queues the other way round, which is the order the
+code already used, so nothing changes there.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ libavcodec/v4l2_m2m.c | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/libavcodec/v4l2_m2m.c b/libavcodec/v4l2_m2m.c
+index 07c7500000..4dc7116675 100644
+--- a/libavcodec/v4l2_m2m.c
++++ b/libavcodec/v4l2_m2m.c
+@@ -137,6 +137,7 @@ done:
+ static av_cold int v4l2_configure_contexts(V4L2m2mContext *s)
+ {
+     void *log_ctx = s->avctx;
++    V4L2Context *first, *second;
+     int ret;
+     struct v4l2_format ofmt, cfmt;
+ 
+@@ -160,15 +161,28 @@ static av_cold int v4l2_configure_contexts(V4L2m2mContext *s)
+                                                cfmt.fmt.pix.pixelformat),
+                                  av_get_pix_fmt_name(s->capture.av_pix_fmt) ?: "none");
+ 
+-    ret = ff_v4l2_context_set_format(&s->output);
++    /* The queue carrying the coded format goes first. A driver derives the
++     * other queue's format from it and may reset that queue outright when the
++     * coded format is set, so setting them the other way round loses whatever
++     * was negotiated for the raw side. That is CAPTURE when encoding and
++     * OUTPUT when decoding. */
++    if (s->avctx && av_codec_is_encoder(s->avctx->codec)) {
++        first  = &s->capture;
++        second = &s->output;
++    } else {
++        first  = &s->output;
++        second = &s->capture;
++    }
++
++    ret = ff_v4l2_context_set_format(first);
+     if (ret) {
+-        av_log(log_ctx, AV_LOG_ERROR, "can't set v4l2 output format\n");
++        av_log(log_ctx, AV_LOG_ERROR, "can't set v4l2 %s format\n", first->name);
+         goto error;
+     }
+ 
+-    ret = ff_v4l2_context_set_format(&s->capture);
++    ret = ff_v4l2_context_set_format(second);
+     if (ret) {
+-        av_log(log_ctx, AV_LOG_ERROR, "can't to set v4l2 capture format\n");
++        av_log(log_ctx, AV_LOG_ERROR, "can't set v4l2 %s format\n", second->name);
+         goto error;
+     }
+ 
+-- 
+2.43.0

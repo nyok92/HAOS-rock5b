@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 22:56:39 -0400
+Subject: [PATCH] lavfi/overlay_vulkan: keep the main input's timebase on the
+ output
+
+The filter labels its output with one timebase and fills it with
+timestamps expressed in another, so every output timestamp is wrong
+whenever the two inputs do not already agree on one.
+
+ff_framesync_configure() derives fs->time_base as the gcd of the
+synchronised inputs' timebases, and framesync_inject_frame() rewrites
+each arriving frame's pts into it. overlay_vulkan_blend() then copies
+that rewritten pts onto the output frame with av_frame_copy_props(),
+while the output link still carries the timebase ff_filter_config_links()
+defaulted it to, which is the main input's. Compositing a 1/1000 main
+branch with a 30000/1001 overlay branch gives fs->time_base 1/30000, so
+every output pts comes out 30 times too large; the factor is whatever
+ratio the two branches happen to produce.
+
+State the output timebase explicitly as the main input's and pin
+framesync to it, as overlay, overlay_vaapi and overlay_cuda do. With
+fs->time_base already set, ff_framesync_configure() skips the gcd and
+the injected timestamps are in the units the output link declares.
+---
+ libavfilter/vf_overlay_vulkan.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/libavfilter/vf_overlay_vulkan.c b/libavfilter/vf_overlay_vulkan.c
+index 1f9eed8..31efc9a 100644
+--- a/libavfilter/vf_overlay_vulkan.c
++++ b/libavfilter/vf_overlay_vulkan.c
+@@ -263,10 +263,14 @@ static int overlay_vulkan_config_output(AVFilterLink *outlink)
+     if (err < 0)
+         return err;
+ 
++    outlink->time_base = avctx->inputs[0]->time_base;
++
+     err = ff_framesync_init_dualinput(&s->fs, avctx);
+     if (err < 0)
+         return err;
+ 
++    s->fs.time_base = outlink->time_base;
++
+     return ff_framesync_configure(&s->fs);
+ }
+ 
+-- 
+2.43.0

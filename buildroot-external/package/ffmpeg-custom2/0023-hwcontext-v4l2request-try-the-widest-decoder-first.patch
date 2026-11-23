@@ -1,0 +1,204 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Wed, 7 Oct 2026 23:53:46 -0400
+Subject: [PATCH] lavu/hwcontext_v4l2request: try the widest decoder first
+
+The probe walks udev's media devices in the order udev lists them, which
+is sorted by sysfs path, and takes the first that accepts the stream. On
+a SoC with two decoders for one codec, which one that is follows from
+register addresses rather than from anything about the decoders.
+
+On RK3588 it picks the wrong one. The Hantro VDPU2 (fdb50000) sorts
+before rkvdec (fdc38000), and both take H.264, so every 8-bit stream up
+to 1920x1088 lands on the VDPU2. That block decodes 1080p H.264 at about
+3x realtime in total, however many streams share it. rkvdec decodes one
+stream at 9.3x and about 18x in total across its two cores. Four
+concurrent 1080p H.264 transcodes run at 0.75x each on the VDPU2 and at
+2.9x each on rkvdec, for the same CPU.
+
+Rank the media devices before probing them: by the largest frame area
+any of their video devices reports for the coded format through
+VIDIOC_ENUM_FRAMESIZES, widest first, and in udev's order where the
+areas are equal. The newer block of such a pair is the one with the wider
+range (rkvdec reports 65520x65520 for S264, the VDPU2 1920x1088). A
+device that does not report the format ranks last and is still probed,
+so nothing that probed before is lost. Each device's reach is logged at
+verbose level.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ libavutil/hwcontext_v4l2request.c | 128 +++++++++++++++++++++++++++++-
+ 1 file changed, 125 insertions(+), 3 deletions(-)
+
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index f08f981..022073a 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -651,15 +651,106 @@ static int v4l2request_probe_media_device(AVHWFramesContext *hwfc,
+     return ret;
+ }
+ 
++/*
++ * The largest frame area any video device of a media device reports for the
++ * coded pixelformat through VIDIOC_ENUM_FRAMESIZES, or 0 when none reports one.
++ */
++static uint64_t v4l2request_media_reach(AVHWFramesContext *hwfc,
++                                        struct udev_device *device,
++                                        uint32_t pixelformat)
++{
++    struct media_v2_topology topology = {0};
++    struct media_v2_interface *interfaces = NULL;
++    struct udev_device *video;
++    const char *path;
++    uint64_t reach = 0;
++    int media_fd;
++
++    path = udev_device_get_devnode(device);
++    if (!path)
++        return 0;
++
++    media_fd = open(path, O_RDWR);
++    if (media_fd < 0)
++        return 0;
++
++    if (ioctl(media_fd, MEDIA_IOC_G_TOPOLOGY, &topology) < 0 ||
++        !topology.num_interfaces)
++        goto out;
++
++    interfaces = av_calloc(topology.num_interfaces, sizeof(*interfaces));
++    if (!interfaces)
++        goto out;
++
++    topology.ptr_interfaces = (__u64)(uintptr_t)interfaces;
++    if (ioctl(media_fd, MEDIA_IOC_G_TOPOLOGY, &topology) < 0)
++        goto out;
++
++    for (int i = 0; i < topology.num_interfaces; i++) {
++        struct v4l2_frmsizeenum frmsize = {
++            .pixel_format = pixelformat,
++        };
++        int video_fd;
++
++        if (interfaces[i].intf_type != MEDIA_INTF_T_V4L_VIDEO)
++            continue;
++
++        video = udev_device_new_from_devnum(udev_device_get_udev(device), 'c',
++                                            makedev(interfaces[i].devnode.major,
++                                                    interfaces[i].devnode.minor));
++        if (!video)
++            continue;
++
++        path = udev_device_get_devnode(video);
++        video_fd = path ? open(path, O_RDWR | O_NONBLOCK) : -1;
++        udev_device_unref(video);
++        if (video_fd < 0)
++            continue;
++
++        while (ioctl(video_fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
++            uint64_t area = frmsize.type == V4L2_FRMSIZE_TYPE_DISCRETE ?
++                (uint64_t)frmsize.discrete.width * frmsize.discrete.height :
++                (uint64_t)frmsize.stepwise.max_width * frmsize.stepwise.max_height;
++            reach = FFMAX(reach, area);
++            frmsize.index++;
++        }
++        close(video_fd);
++    }
++
++out:
++    av_free(interfaces);
++    close(media_fd);
++    av_log(hwfc, AV_LOG_VERBOSE, "Media device %s reaches %"PRIu64" pixels for %s\n",
++           udev_device_get_devnode(device), reach, av_fourcc2str(pixelformat));
++    return reach;
++}
++
++typedef struct V4L2RequestMediaCandidate {
++    struct udev_device *device;
++    uint64_t reach;
++    int order;
++} V4L2RequestMediaCandidate;
++
++static int v4l2request_compare_candidates(const void *a, const void *b)
++{
++    const V4L2RequestMediaCandidate *ca = a, *cb = b;
++
++    if (ca->reach != cb->reach)
++        return ca->reach > cb->reach ? -1 : 1;
++    return ca->order - cb->order;
++}
++
+ static int v4l2request_probe_media_devices(AVHWFramesContext *hwfc,
+                                            struct udev *udev,
+                                            uint32_t pixelformat,
+                                            uint32_t buffersize)
+ {
++    V4L2RequestMediaCandidate *candidates = NULL;
+     struct udev_enumerate *enumerate;
+     struct udev_list_entry *devices;
+     struct udev_list_entry *entry;
+     struct udev_device *device;
++    int nb_candidates = 0;
+     int ret;
+ 
+     enumerate = udev_enumerate_new(udev);
+@@ -670,8 +761,8 @@ static int v4l2request_probe_media_devices(AVHWFramesContext *hwfc,
+     udev_enumerate_scan_devices(enumerate);
+     devices = udev_enumerate_get_list_entry(enumerate);
+ 
+-    ret = AVERROR(ENOENT);
+     udev_list_entry_foreach(entry, devices) {
++        V4L2RequestMediaCandidate *grown;
+         const char *path = udev_list_entry_get_name(entry);
+         if (!path)
+             continue;
+@@ -680,15 +771,46 @@ static int v4l2request_probe_media_devices(AVHWFramesContext *hwfc,
+         if (!device)
+             continue;
+ 
++        grown = av_realloc_array(candidates, nb_candidates + 1, sizeof(*candidates));
++        if (!grown) {
++            udev_device_unref(device);
++            ret = AVERROR(ENOMEM);
++            goto fail;
++        }
++        candidates = grown;
++        candidates[nb_candidates] = (V4L2RequestMediaCandidate) {
++            .device = device,
++            .reach  = v4l2request_media_reach(hwfc, device, pixelformat),
++            .order  = nb_candidates,
++        };
++        nb_candidates++;
++    }
++
++    /*
++     * Where several decoders take the coded format, try the one that reports
++     * the widest frame-size range first: on a SoC that carries two decoders for
++     * one codec, that is the newer and faster block. udev lists media devices
++     * by sysfs path, so without this the choice would follow register addresses.
++     * Equal ranges keep udev's order.
++     */
++    qsort(candidates, nb_candidates, sizeof(*candidates),
++          v4l2request_compare_candidates);
++
++    ret = AVERROR(ENOENT);
++    for (int i = 0; i < nb_candidates; i++) {
+         // Probe media device for a capable video device
+-        ret = v4l2request_probe_media_device(hwfc, device, pixelformat, buffersize);
+-        udev_device_unref(device);
++        ret = v4l2request_probe_media_device(hwfc, candidates[i].device,
++                                             pixelformat, buffersize);
+ 
+         // Stop when we have found a capable media and video device
+         if (!ret)
+             break;
+     }
+ 
++fail:
++    for (int i = 0; i < nb_candidates; i++)
++        udev_device_unref(candidates[i].device);
++    av_free(candidates);
+     udev_enumerate_unref(enumerate);
+     return ret;
+ }
+-- 
+2.43.0

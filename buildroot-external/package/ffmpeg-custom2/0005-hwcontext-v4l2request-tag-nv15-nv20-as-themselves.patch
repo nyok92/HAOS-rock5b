@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Sun, 30 Aug 2026 13:08:35 -0400
+Subject: [PATCH] lavu/hwcontext_v4l2request: tag NV15 and NV20 as themselves
+
+V4L2_PIX_FMT_NV15 and NV20 are packed: four 10-bit samples in five bytes,
+no padding. The table gave them the planar logical sw_format YUV420P10 and
+YUV422P10, which describes neither the plane count nor the sample layout of
+the buffer the decoder writes.
+
+Because the tag was wrong, everything generic that would act on it had to
+be switched off. transfer_get_formats() blanks its whole format list when
+sw_format is YUV420P, YUV420P10 or YUV422P10, and map_from() returns ENOSYS
+for the same three -- so hwdownload of a 10-bit frame fails for every target
+format, not just for one, and hwmap fails outright. On RK3588 that is every
+10-bit HEVC, VP9 and AV1 frame the stateless decoder produces, and it is why
+HDR content has to fall back to software decode to reach a tone mapper.
+
+AV_PIX_FMT_NV15 and AV_PIX_FMT_NV20 describe the buffer exactly, and
+swscale reads both, so tag them honestly and the machinery works as it
+stands: hwdownload yields a real NV15 frame, hwmap maps the dma-buf with no
+copy, and `format=yuv420p10le` unpacks. map_frame() needs nothing -- it
+fills data[] and linesize[] from the DRM layer descriptors and never
+consults sw_format.
+
+The two guards are left alone on purpose. They still name the planar tags,
+which is still correct for the entries that genuinely carry one: the
+Allwinner tiled NV12, the Broadcom SAND128 pair, and the AFBC formats all
+keep a logical tag that does not match their layout, and none of them may be
+downloaded or mapped.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ libavutil/hwcontext_v4l2request.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/libavutil/hwcontext_v4l2request.c b/libavutil/hwcontext_v4l2request.c
+index b6633d9..f08f981 100644
+--- a/libavutil/hwcontext_v4l2request.c
++++ b/libavutil/hwcontext_v4l2request.c
+@@ -70,11 +70,11 @@ static const struct {
+     { V4L2_PIX_FMT_NV12_32L32, AV_PIX_FMT_YUV420P, DRM_FORMAT_NV12, DRM_FORMAT_MOD_ALLWINNER_TILED, 8 },
+ #endif
+ #if defined(V4L2_PIX_FMT_NV15) && defined(DRM_FORMAT_NV15)
+-    { V4L2_PIX_FMT_NV15, AV_PIX_FMT_YUV420P10, DRM_FORMAT_NV15, DRM_FORMAT_MOD_LINEAR, 10 },
++    { V4L2_PIX_FMT_NV15, AV_PIX_FMT_NV15, DRM_FORMAT_NV15, DRM_FORMAT_MOD_LINEAR, 10 },
+ #endif
+     { V4L2_PIX_FMT_NV16, AV_PIX_FMT_NV16, DRM_FORMAT_NV16, DRM_FORMAT_MOD_LINEAR, 8 },
+ #if defined(V4L2_PIX_FMT_NV20) && defined(DRM_FORMAT_NV20)
+-    { V4L2_PIX_FMT_NV20, AV_PIX_FMT_YUV422P10, DRM_FORMAT_NV20, DRM_FORMAT_MOD_LINEAR, 10 },
++    { V4L2_PIX_FMT_NV20, AV_PIX_FMT_NV20, DRM_FORMAT_NV20, DRM_FORMAT_MOD_LINEAR, 10 },
+ #endif
+ #if defined(V4L2_PIX_FMT_P010) && defined(DRM_FORMAT_P010)
+     { V4L2_PIX_FMT_P010, AV_PIX_FMT_P010, DRM_FORMAT_P010, DRM_FORMAT_MOD_LINEAR, 10 },
+-- 
+2.43.0

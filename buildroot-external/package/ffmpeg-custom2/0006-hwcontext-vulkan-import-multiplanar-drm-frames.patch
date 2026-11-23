@@ -1,0 +1,205 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nyanmisaka <nst799610810@gmail.com>
+Date: Sun, 9 Aug 2026 12:00:00 -0400
+Subject: [PATCH] lavu/hwcontext_vulkan: import multi-planar DRM frames
+
+vulkan_drm_format_map holds only single-component and packed-RGB fourccs,
+and the importer creates one VkImage per layer using the layer index as the
+plane index. That is the shape VAAPI's SEPARATE_LAYERS export produces.
+
+A producer that emits a composed descriptor instead -- one layer carrying a
+multi-planar fourcc over N planes -- is rejected outright with "Unsupported
+DMABUF layer format". hwcontext_v4l2request is one such producer: a Rockchip
+rkvdec CAPTURE buffer arrives as nb_layers=1, DRM_FORMAT_NV12, nb_planes=2,
+so hwmap=derive_device=vulkan fails AVERROR(EINVAL) for plain 8-bit NV12
+against any Vulkan driver.
+
+Give the table the multi-planar fourccs alongside their Vulkan equivalents,
+so an implementation that can import them directly does. For one that cannot,
+decompose_drm_frame_desc() re-describes the descriptor as one single-component
+layer per plane and the import retries once. AVDRMPlaneDescriptor carries an
+object_index, so two layers may reference the same dma-buf at different
+offsets: the re-description costs no copy and touches no memory. get_plane_wh()
+is already keyed on the layer index, so each decomposed image gets its own
+plane geometry rather than the frame's.
+
+NV15 and NV20 are deliberately absent. Vulkan has no packed 10-bit 4:2:0 or
+4:2:2 format, and neither layout can be expressed as R8/GR88 or R16/GR1616
+components, so there is nothing to map them to.
+
+Origin: jellyfin-ffmpeg, debian/patches/0079-add-fixes-for-vaapi-drm-prime-vulkan-interop.patch
+
+[gregordinary: carried the composed-descriptor import only. The origin patch's
+ linear-tiling fallback, semaphore handling, device-derivation and export-side
+ changes are not taken, and the RGB888/BGR888, P210 and S0xx/S2xx/S4xx table
+ rows it adds are dropped as unreachable here. bind_counts is reset on retry,
+ which the origin leaves stale when a descriptor's first layer passes the
+ format check and a later one does not.]
+
+Signed-off-by: nyanmisaka <nst799610810@gmail.com>
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ libavutil/hwcontext_vulkan.c | 117 +++++++++++++++++++++++++++++------
+ 1 file changed, 98 insertions(+), 19 deletions(-)
+
+diff --git a/libavutil/hwcontext_vulkan.c b/libavutil/hwcontext_vulkan.c
+index 65e2256..bfd1feb 100644
+--- a/libavutil/hwcontext_vulkan.c
++++ b/libavutil/hwcontext_vulkan.c
+@@ -3244,32 +3244,52 @@ static void vulkan_unmap_from_drm(AVHWFramesContext *hwfc, HWMapDescriptor *hwma
+     vulkan_frame_free(hwfc, hwmap->priv);
+ }
+ 
++/* nb_planes and fallbacks describe how a multi-planar fourcc may be re-expressed
++ * as one single-component layer per plane, for implementations that cannot import
++ * the multi-planar format directly. A single-component entry names itself. */
+ static const struct {
+     uint32_t drm_fourcc;
+     VkFormat vk_format;
++    int nb_planes;
++    uint32_t fallbacks[AV_DRM_MAX_PLANES];
+ } vulkan_drm_format_map[] = {
+-    { DRM_FORMAT_R8,       VK_FORMAT_R8_UNORM       },
+-    { DRM_FORMAT_R16,      VK_FORMAT_R16_UNORM      },
+-    { DRM_FORMAT_GR88,     VK_FORMAT_R8G8_UNORM     },
+-    { DRM_FORMAT_RG88,     VK_FORMAT_R8G8_UNORM     },
+-    { DRM_FORMAT_GR1616,   VK_FORMAT_R16G16_UNORM   },
+-    { DRM_FORMAT_RG1616,   VK_FORMAT_R16G16_UNORM   },
+-    { DRM_FORMAT_ARGB8888, VK_FORMAT_B8G8R8A8_UNORM },
+-    { DRM_FORMAT_XRGB8888, VK_FORMAT_B8G8R8A8_UNORM },
+-    { DRM_FORMAT_ABGR8888, VK_FORMAT_R8G8B8A8_UNORM },
+-    { DRM_FORMAT_XBGR8888, VK_FORMAT_R8G8B8A8_UNORM },
+-    { DRM_FORMAT_ARGB2101010, VK_FORMAT_A2B10G10R10_UNORM_PACK32 },
+-    { DRM_FORMAT_ABGR2101010, VK_FORMAT_A2R10G10B10_UNORM_PACK32 },
+-    { DRM_FORMAT_XRGB2101010, VK_FORMAT_A2B10G10R10_UNORM_PACK32 },
+-    { DRM_FORMAT_XBGR2101010, VK_FORMAT_A2R10G10B10_UNORM_PACK32 },
++    { DRM_FORMAT_R8,       VK_FORMAT_R8_UNORM,       1, { DRM_FORMAT_R8 } },
++    { DRM_FORMAT_R16,      VK_FORMAT_R16_UNORM,      1, { DRM_FORMAT_R16 } },
++    { DRM_FORMAT_GR88,     VK_FORMAT_R8G8_UNORM,     1, { DRM_FORMAT_GR88 } },
++    { DRM_FORMAT_RG88,     VK_FORMAT_R8G8_UNORM,     1, { DRM_FORMAT_RG88 } },
++    { DRM_FORMAT_GR1616,   VK_FORMAT_R16G16_UNORM,   1, { DRM_FORMAT_GR1616 } },
++    { DRM_FORMAT_RG1616,   VK_FORMAT_R16G16_UNORM,   1, { DRM_FORMAT_RG1616 } },
++    { DRM_FORMAT_ARGB8888, VK_FORMAT_B8G8R8A8_UNORM, 1, { DRM_FORMAT_ARGB8888 } },
++    { DRM_FORMAT_XRGB8888, VK_FORMAT_B8G8R8A8_UNORM, 1, { DRM_FORMAT_XRGB8888 } },
++    { DRM_FORMAT_ABGR8888, VK_FORMAT_R8G8B8A8_UNORM, 1, { DRM_FORMAT_ABGR8888 } },
++    { DRM_FORMAT_XBGR8888, VK_FORMAT_R8G8B8A8_UNORM, 1, { DRM_FORMAT_XBGR8888 } },
++    { DRM_FORMAT_ARGB2101010, VK_FORMAT_A2B10G10R10_UNORM_PACK32, 1, { DRM_FORMAT_ARGB2101010 } },
++    { DRM_FORMAT_ABGR2101010, VK_FORMAT_A2R10G10B10_UNORM_PACK32, 1, { DRM_FORMAT_ABGR2101010 } },
++    { DRM_FORMAT_XRGB2101010, VK_FORMAT_A2B10G10R10_UNORM_PACK32, 1, { DRM_FORMAT_XRGB2101010 } },
++    { DRM_FORMAT_XBGR2101010, VK_FORMAT_A2R10G10B10_UNORM_PACK32, 1, { DRM_FORMAT_XBGR2101010 } },
+ 
+     // All these DRM_FORMATs were added in the same libdrm commit.
+ #ifdef DRM_FORMAT_XYUV8888
+-    { DRM_FORMAT_XYUV8888, VK_FORMAT_R8G8B8A8_UNORM     },
+-    { DRM_FORMAT_XVYU2101010, VK_FORMAT_A2R10G10B10_UNORM_PACK32 } ,
+-    { DRM_FORMAT_XVYU12_16161616, VK_FORMAT_R12X4G12X4B12X4A12X4_UNORM_4PACK16 } ,
+-    { DRM_FORMAT_XVYU16161616, VK_FORMAT_R16G16B16A16_UNORM } ,
++    { DRM_FORMAT_XYUV8888, VK_FORMAT_R8G8B8A8_UNORM, 1, { DRM_FORMAT_XYUV8888 } },
++    { DRM_FORMAT_XVYU2101010, VK_FORMAT_A2R10G10B10_UNORM_PACK32, 1, { DRM_FORMAT_XVYU2101010 } },
++    { DRM_FORMAT_XVYU12_16161616, VK_FORMAT_R12X4G12X4B12X4A12X4_UNORM_4PACK16, 1, { DRM_FORMAT_XVYU12_16161616 } },
++    { DRM_FORMAT_XVYU16161616, VK_FORMAT_R16G16B16A16_UNORM, 1, { DRM_FORMAT_XVYU16161616 } },
+ #endif
++
++    { DRM_FORMAT_NV12,     VK_FORMAT_G8_B8R8_2PLANE_420_UNORM, 2, { DRM_FORMAT_R8, DRM_FORMAT_GR88 } },
++    { DRM_FORMAT_NV16,     VK_FORMAT_G8_B8R8_2PLANE_422_UNORM, 2, { DRM_FORMAT_R8, DRM_FORMAT_GR88 } },
++    { DRM_FORMAT_NV24,     VK_FORMAT_G8_B8R8_2PLANE_444_UNORM, 2, { DRM_FORMAT_R8, DRM_FORMAT_GR88 } },
++
++    // All these DRM_FORMATs were added in the same libdrm commit.
++#ifdef DRM_FORMAT_P010
++    { DRM_FORMAT_P010,     VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16, 2, { DRM_FORMAT_R16, DRM_FORMAT_GR1616 } },
++    { DRM_FORMAT_P012,     VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16, 2, { DRM_FORMAT_R16, DRM_FORMAT_GR1616 } },
++    { DRM_FORMAT_P016,     VK_FORMAT_G16_B16R16_2PLANE_420_UNORM,               2, { DRM_FORMAT_R16, DRM_FORMAT_GR1616 } },
++#endif
++
++    { DRM_FORMAT_YUV420,   VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM, 3, { DRM_FORMAT_R8, DRM_FORMAT_R8, DRM_FORMAT_R8 } },
++    { DRM_FORMAT_YUV422,   VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM, 3, { DRM_FORMAT_R8, DRM_FORMAT_R8, DRM_FORMAT_R8 } },
++    { DRM_FORMAT_YUV444,   VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM, 3, { DRM_FORMAT_R8, DRM_FORMAT_R8, DRM_FORMAT_R8 } },
+ };
+ 
+ static inline VkFormat drm_to_vulkan_fmt(uint32_t drm_fourcc)
+@@ -3280,6 +3300,51 @@ static inline VkFormat drm_to_vulkan_fmt(uint32_t drm_fourcc)
+     return VK_FORMAT_UNDEFINED;
+ }
+ 
++/* Re-describe a descriptor whose layers carry a multi-planar fourcc as one
++ * single-component layer per plane, pointing at the same objects at the same
++ * offsets. Purely a re-description: no memory is touched and no copy is made.
++ * Returns ENOSYS when the source is already single-component per layer. */
++static inline int decompose_drm_frame_desc(AVDRMFrameDescriptor *dst,
++                                           const AVDRMFrameDescriptor *src)
++{
++    int map_idx = -1;
++    int p = 0;
++
++    if (!src || !dst)
++        return AVERROR(EINVAL);
++
++    for (int i = 0; i < FF_ARRAY_ELEMS(vulkan_drm_format_map); i++) {
++        if (vulkan_drm_format_map[i].drm_fourcc == src->layers[0].format) {
++            map_idx = i;
++            break;
++        }
++    }
++    if (map_idx == -1)
++        return AVERROR(ENOSYS);
++    if (vulkan_drm_format_map[map_idx].nb_planes == 1 &&
++        vulkan_drm_format_map[map_idx].fallbacks[0] == src->layers[0].format)
++        return AVERROR(ENOSYS);
++
++    dst->nb_objects = src->nb_objects;
++    memcpy(dst->objects, src->objects, sizeof(src->objects));
++
++    for (int i = 0; i < src->nb_layers; i++) {
++        for (int j = 0; j < src->layers[i].nb_planes; j++) {
++            if (p >= vulkan_drm_format_map[map_idx].nb_planes)
++                goto end;
++
++            dst->layers[p].format    = vulkan_drm_format_map[map_idx].fallbacks[p];
++            dst->layers[p].nb_planes = 1;
++            dst->layers[p].planes[0] = src->layers[i].planes[j];
++            p++;
++        }
++    }
++
++end:
++    dst->nb_layers = p;
++    return 0;
++}
++
+ static int vulkan_map_from_drm_frame_desc(AVHWFramesContext *hwfc, AVVkFrame **frame,
+                                           const AVFrame *src, int flags)
+ {
+@@ -3291,9 +3356,15 @@ static int vulkan_map_from_drm_frame_desc(AVHWFramesContext *hwfc, AVVkFrame **f
+     VulkanDevicePriv *p = ctx->hwctx;
+     AVVulkanDeviceContext *hwctx = &p->p;
+     FFVulkanFunctions *vk = &p->vkctx.vkfn;
+-    const AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *)src->data[0];
++    const AVDRMFrameDescriptor *desc_src = (AVDRMFrameDescriptor *)src->data[0];
++    const AVDRMFrameDescriptor *desc = desc_src;
++    AVDRMFrameDescriptor desc_decomposed = { 0 };
+     VkBindImageMemoryInfo bind_info[AV_DRM_MAX_PLANES];
+     VkBindImagePlaneMemoryInfo plane_info[AV_DRM_MAX_PLANES];
++    int retry = 0;
++
++start:
++    bind_counts = 0;
+ 
+     for (int i = 0; i < desc->nb_layers; i++) {
+         if (drm_to_vulkan_fmt(desc->layers[i].format) == VK_FORMAT_UNDEFINED) {
+@@ -3400,6 +3471,14 @@ static int vulkan_map_from_drm_frame_desc(AVHWFramesContext *hwfc, AVVkFrame **f
+         ret = vk->GetPhysicalDeviceImageFormatProperties2(hwctx->phys_dev,
+                                                           &fmt_props, &props_ret);
+         if (ret != VK_SUCCESS) {
++            /* The driver cannot import this multi-planar format directly.
++             * Re-describe it as one single-component layer per plane and retry. */
++            if (!retry && !decompose_drm_frame_desc(&desc_decomposed, desc_src)) {
++                retry++;
++                desc = &desc_decomposed;
++                vulkan_frame_free(hwfc, f);
++                goto start;
++            }
+             av_log(ctx, AV_LOG_ERROR, "Cannot map DRM frame to Vulkan: %s\n",
+                    ff_vk_ret2str(ret));
+             err = AVERROR_EXTERNAL;
+-- 
+2.43.0

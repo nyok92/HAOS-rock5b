@@ -1,0 +1,237 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Sun, 30 Aug 2026 22:19:22 -0400
+Subject: [PATCH] avcodec/v4l2_request_hevc: set the SPS short and long term
+ RPS controls
+
+The rkvdec VDPU381/VDPU383 hardware parses slice headers itself, so a
+slice that selects a short or long term RPS from the SPS by index needs
+the SPS RPS tables in the driver, passed as the Linux 7.2 controls
+V4L2_CID_STATELESS_HEVC_EXT_SPS_ST_RPS and _LT_RPS. Without them the
+driver programs no RPS table (it warns "Long and short term RPS not
+set") and every inter frame of such a stream reconstructs against the
+wrong references while decoding reports success.
+
+Streams that carry their RPS inline in each slice header never see
+this: the hardware parses those itself. That split is why the gap
+stays invisible on most encoder output (x265 writes the inline form)
+and shows up on conformance streams (the HM reference encoder writes
+SPS-level sets): JCT-VC-HEVC_V1 on RK3588 scores 15/147 without these
+controls and the failures concentrate in exactly the inter-coded
+vectors.
+
+Each short term set is sent in the explicit (non inter-set-predicted)
+form. The driver only derives the per-set delta POCs and used flags
+from the control, which the explicit syntax encodes exactly, so
+re-encoding an inter-predicted set this way loses nothing.
+
+Both controls are probed like the other optional controls and sent
+only when the driver exposes them, so drivers without the uAPI are
+untouched. The control definitions are carried for builds against
+pre-7.2 kernel headers.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ libavcodec/v4l2_request_hevc.c | 136 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 133 insertions(+), 3 deletions(-)
+
+diff --git a/libavcodec/v4l2_request_hevc.c b/libavcodec/v4l2_request_hevc.c
+index 26cba2c..06cffc5 100644
+--- a/libavcodec/v4l2_request_hevc.c
++++ b/libavcodec/v4l2_request_hevc.c
+@@ -25,7 +25,38 @@
+ #include "internal.h"
+ #include "v4l2_request.h"
+ 
+-#define V4L2_HEVC_CONTROLS_MAX 6
++#define V4L2_HEVC_CONTROLS_MAX 8
++
++/*
++ * The SPS short and long term RPS table controls entered the uAPI with
++ * Linux 7.2; carry their definitions for builds against older headers.
++ */
++#ifndef V4L2_CID_STATELESS_HEVC_EXT_SPS_ST_RPS
++#define V4L2_CID_STATELESS_HEVC_EXT_SPS_ST_RPS  (V4L2_CID_CODEC_STATELESS_BASE + 408)
++#define V4L2_CID_STATELESS_HEVC_EXT_SPS_LT_RPS  (V4L2_CID_CODEC_STATELESS_BASE + 409)
++
++#define V4L2_HEVC_EXT_SPS_ST_RPS_FLAG_INTER_REF_PIC_SET_PRED	0x1
++
++struct v4l2_ctrl_hevc_ext_sps_st_rps {
++	__u8	delta_idx_minus1;
++	__u8	delta_rps_sign;
++	__u8	num_negative_pics;
++	__u8	num_positive_pics;
++	__u32	used_by_curr_pic;
++	__u32	use_delta_flag;
++	__u16	abs_delta_rps_minus1;
++	__u16	delta_poc_s0_minus1[16];
++	__u16	delta_poc_s1_minus1[16];
++	__u16	flags;
++};
++
++#define V4L2_HEVC_EXT_SPS_LT_RPS_FLAG_USED_LT		0x1
++
++struct v4l2_ctrl_hevc_ext_sps_lt_rps {
++	__u16	lt_ref_pic_poc_lsb_sps;
++	__u16	flags;
++};
++#endif
+ 
+ typedef struct V4L2RequestContextHEVC {
+     V4L2RequestContext base;
+@@ -33,6 +64,8 @@ typedef struct V4L2RequestContextHEVC {
+     enum v4l2_stateless_hevc_start_code start_code;
+     unsigned int max_slice_params;
+     unsigned int max_entry_point_offsets;
++    unsigned int max_sps_st_rps;
++    unsigned int max_sps_lt_rps;
+     bool has_scaling_matrix;
+ } V4L2RequestContextHEVC;
+ 
+@@ -49,6 +82,10 @@ typedef struct V4L2RequestControlsHEVC {
+     uint32_t *entry_point_offsets;
+     unsigned int allocated_entry_point_offsets;
+     unsigned int num_entry_point_offsets;
++    struct v4l2_ctrl_hevc_ext_sps_st_rps sps_st_rps[HEVC_MAX_SHORT_TERM_REF_PIC_SETS];
++    unsigned int num_sps_st_rps;
++    struct v4l2_ctrl_hevc_ext_sps_lt_rps sps_lt_rps[HEVC_MAX_LONG_TERM_REF_PICS];
++    unsigned int num_sps_lt_rps;
+     bool first_slice;
+ } V4L2RequestControlsHEVC;
+ 
+@@ -361,6 +398,58 @@ static void fill_sps(struct v4l2_ctrl_hevc_sps *ctrl, const HEVCContext *h)
+         ctrl->flags |= V4L2_HEVC_SPS_FLAG_STRONG_INTRA_SMOOTHING_ENABLED;
+ }
+ 
++/*
++ * The rkvdec VDPU381/VDPU383 hardware parses slice headers itself, so when
++ * a slice selects a short or long term RPS from the SPS by index the driver
++ * needs the SPS RPS tables, passed through these two controls. Every short
++ * term set is sent in the explicit (non inter-set-predicted) form: the
++ * driver only derives the per-set delta POCs and used flags from the
++ * control, which the explicit syntax encodes exactly, so re-encoding an
++ * inter-predicted set this way loses nothing.
++ */
++static void fill_sps_rps(V4L2RequestControlsHEVC *controls, const HEVCContext *h)
++{
++    const HEVCSPS *sps = h->pps->sps;
++
++    controls->num_sps_st_rps = sps->nb_st_rps;
++    for (unsigned int i = 0; i < sps->nb_st_rps; i++) {
++        const ShortTermRPS *rps = &sps->st_rps[i];
++        struct v4l2_ctrl_hevc_ext_sps_st_rps *ctrl = &controls->sps_st_rps[i];
++        unsigned int num_negative = FFMIN(rps->num_negative_pics, 16);
++        unsigned int num_positive = FFMIN(rps->num_delta_pocs -
++                                          rps->num_negative_pics, 16);
++        int prev;
++
++        *ctrl = (struct v4l2_ctrl_hevc_ext_sps_st_rps) {
++            .num_negative_pics = num_negative,
++            .num_positive_pics = num_positive,
++            .used_by_curr_pic = rps->used,
++        };
++
++        prev = 0;
++        for (unsigned int j = 0; j < num_negative; j++) {
++            ctrl->delta_poc_s0_minus1[j] = prev - rps->delta_poc[j] - 1;
++            prev = rps->delta_poc[j];
++        }
++
++        prev = 0;
++        for (unsigned int j = 0; j < num_positive; j++) {
++            ctrl->delta_poc_s1_minus1[j] = rps->delta_poc[rps->num_negative_pics + j] -
++                                           prev - 1;
++            prev = rps->delta_poc[rps->num_negative_pics + j];
++        }
++    }
++
++    controls->num_sps_lt_rps = sps->num_long_term_ref_pics_sps;
++    for (unsigned int i = 0; i < sps->num_long_term_ref_pics_sps; i++) {
++        controls->sps_lt_rps[i] = (struct v4l2_ctrl_hevc_ext_sps_lt_rps) {
++            .lt_ref_pic_poc_lsb_sps = sps->lt_ref_pic_poc_lsb_sps[i],
++            .flags = (sps->used_by_curr_pic_lt & (1U << i)) ?
++                     V4L2_HEVC_EXT_SPS_LT_RPS_FLAG_USED_LT : 0,
++        };
++    }
++}
++
+ static int v4l2_request_hevc_start_frame(AVCodecContext *avctx,
+                                          av_unused const AVBufferRef *buf_ref,
+                                          av_unused const uint8_t *buffer,
+@@ -381,6 +470,9 @@ static int v4l2_request_hevc_start_frame(AVCodecContext *avctx,
+     fill_sps(&controls->sps, h);
+     fill_decode_params(&controls->decode_params, h);
+ 
++    if (ctx->max_sps_st_rps || ctx->max_sps_lt_rps)
++        fill_sps_rps(controls, h);
++
+     if (ctx->has_scaling_matrix) {
+         const ScalingList *sl = pps->scaling_list_data_present_flag ?
+                                 &pps->scaling_list :
+@@ -556,6 +648,24 @@ static int v4l2_request_hevc_queue_decode(AVCodecContext *avctx, bool last_slice
+         };
+     }
+ 
++    if (ctx->max_sps_st_rps && controls->num_sps_st_rps) {
++        control[count++] = (struct v4l2_ext_control) {
++            .id = V4L2_CID_STATELESS_HEVC_EXT_SPS_ST_RPS,
++            .ptr = controls->sps_st_rps,
++            .size = sizeof(*controls->sps_st_rps) *
++                    FFMIN(controls->num_sps_st_rps, ctx->max_sps_st_rps),
++        };
++    }
++
++    if (ctx->max_sps_lt_rps && controls->num_sps_lt_rps) {
++        control[count++] = (struct v4l2_ext_control) {
++            .id = V4L2_CID_STATELESS_HEVC_EXT_SPS_LT_RPS,
++            .ptr = controls->sps_lt_rps,
++            .size = sizeof(*controls->sps_lt_rps) *
++                    FFMIN(controls->num_sps_lt_rps, ctx->max_sps_lt_rps),
++        };
++    }
++
+     if (ctx->decode_mode == V4L2_STATELESS_HEVC_DECODE_MODE_SLICE_BASED)
+         return ff_v4l2_request_decode_slice(avctx, &controls->pic, control, count,
+                                             controls->first_slice, last_slice);
+@@ -652,6 +762,12 @@ static int v4l2_request_hevc_post_frames_ctx(AVCodecContext *avctx)
+     struct v4l2_query_ext_ctrl slice_params = {
+         .id = V4L2_CID_STATELESS_HEVC_SLICE_PARAMS,
+     };
++    struct v4l2_query_ext_ctrl sps_st_rps = {
++        .id = V4L2_CID_STATELESS_HEVC_EXT_SPS_ST_RPS,
++    };
++    struct v4l2_query_ext_ctrl sps_lt_rps = {
++        .id = V4L2_CID_STATELESS_HEVC_EXT_SPS_LT_RPS,
++    };
+ 
+     ctx->decode_mode = ff_v4l2_request_query_control_default_value(avctx,
+                                         V4L2_CID_STATELESS_HEVC_DECODE_MODE);
+@@ -692,10 +808,24 @@ static int v4l2_request_hevc_post_frames_ctx(AVCodecContext *avctx)
+     else
+         ctx->max_slice_params = 0;
+ 
++    ret = ff_v4l2_request_query_control(avctx, &sps_st_rps);
++    if (!ret)
++        ctx->max_sps_st_rps = FFMAX(sps_st_rps.dims[0], 1);
++    else
++        ctx->max_sps_st_rps = 0;
++
++    ret = ff_v4l2_request_query_control(avctx, &sps_lt_rps);
++    if (!ret)
++        ctx->max_sps_lt_rps = FFMAX(sps_lt_rps.dims[0], 1);
++    else
++        ctx->max_sps_lt_rps = 0;
++
+     av_log(ctx, AV_LOG_VERBOSE, "%s-based decoder with SLICE_PARAMS=%u, "
+-           "ENTRY_POINT_OFFSETS=%u and SCALING_MATRIX=%d controls\n",
++           "ENTRY_POINT_OFFSETS=%u, SCALING_MATRIX=%d, EXT_SPS_ST_RPS=%u "
++           "and EXT_SPS_LT_RPS=%u controls\n",
+           ctx->decode_mode == V4L2_STATELESS_HEVC_DECODE_MODE_SLICE_BASED ? "slice" : "frame",
+-          ctx->max_slice_params, ctx->max_entry_point_offsets, ctx->has_scaling_matrix);
++          ctx->max_slice_params, ctx->max_entry_point_offsets, ctx->has_scaling_matrix,
++          ctx->max_sps_st_rps, ctx->max_sps_lt_rps);
+ 
+     control[0].value = ctx->decode_mode;
+     control[1].value = ctx->start_code;
+-- 
+2.43.0

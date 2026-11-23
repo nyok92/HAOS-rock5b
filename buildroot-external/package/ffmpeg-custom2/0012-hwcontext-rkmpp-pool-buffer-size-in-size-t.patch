@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 13:25:00 -0400
+Subject: [PATCH] lavu/hwcontext_rkmpp: compute the pool buffer size in size_t
+
+rkmpp_drm_pool_alloc() multiplied aligned width, aligned height and padded
+bits-per-pixel as `int` and assigned the result to a size_t. The
+destination is wide enough; the intermediate is not, and signed overflow is
+undefined behaviour rather than a wrong-but-predictable size.
+
+The threshold is far above any real video -- NV12 at 7680x4320 uses about
+30% of INT_MAX, and reaching it needs roughly 13000x13000 -- so this is
+hardening, not a fix for something observed. Widening the first operand
+costs nothing and removes the class.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ libavutil/hwcontext_rkmpp.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/libavutil/hwcontext_rkmpp.c b/libavutil/hwcontext_rkmpp.c
+index ea5c331..8875909 100644
+--- a/libavutil/hwcontext_rkmpp.c
++++ b/libavutil/hwcontext_rkmpp.c
+@@ -210,7 +210,10 @@ static AVBufferRef *rkmpp_drm_pool_alloc(void *opaque, size_t size)
+     const int aligned_h = FFALIGN(hwfc->height * 5 / 4, 64);
+ 
+     MppBuffer mpp_buf = NULL;
+-    size_t mpp_buf_size = aligned_w * aligned_h * bits_pp / 8;
++    /* Widen before multiplying, not after: the product of two aligned
++     * dimensions and a bit depth overflows `int` well below the range size_t
++     * can hold, and signed overflow is undefined rather than merely wrong. */
++    size_t mpp_buf_size = (size_t)aligned_w * aligned_h * bits_pp / 8;
+ 
+     if (hwfc->initial_pool_size > 0 &&
+         avfc->nb_frames >= hwfc->initial_pool_size)
+-- 
+2.43.0

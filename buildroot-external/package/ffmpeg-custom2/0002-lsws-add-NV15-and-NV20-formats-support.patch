@@ -1,0 +1,215 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nyanmisaka <nst799610810@gmail.com>
+Date: Sun, 25 Oct 2026 16:39:31 +0800
+Subject: [PATCH] lsws: add NV15 and NV20 formats support
+
+Signed-off-by: nyanmisaka <nst799610810@gmail.com>
+(cherry picked from commit 8aed21ab362b6a08044decd4f6e4d20ea78546d3)
+[gregordinary: the imgutils reference lists NV15 and NV20 after n9.1's
+ XYZP12 pair, in enum order.]
+---
+ libswscale/format.c           |  2 +
+ libswscale/input.c            | 41 ++++++++++++++++++
+ libswscale/swscale_unscaled.c | 81 +++++++++++++++++++++++++++++++++++
+ tests/ref/fate/imgutils       |  4 ++
+ 4 files changed, 128 insertions(+)
+
+diff --git a/libswscale/format.c b/libswscale/format.c
+index 72d8bdb272..da094d8817 100644
+--- a/libswscale/format.c
++++ b/libswscale/format.c
+@@ -225,6 +225,8 @@ static const LegacyFormatEntry legacy_format_entries[] = {
+     [AV_PIX_FMT_XYZ12LE]        = { 1, 1, 1 },
+     [AV_PIX_FMT_AYUV64LE]       = { 1, 1},
+     [AV_PIX_FMT_AYUV64BE]       = { 1, 1 },
++    [AV_PIX_FMT_NV15]           = { 1, 0 },
++    [AV_PIX_FMT_NV20]           = { 1, 0 },
+     [AV_PIX_FMT_P010LE]         = { 1, 1 },
+     [AV_PIX_FMT_P010BE]         = { 1, 1 },
+     [AV_PIX_FMT_P012LE]         = { 1, 1 },
+diff --git a/libswscale/input.c b/libswscale/input.c
+index 2e6dd6f413..280e2f20ee 100644
+--- a/libswscale/input.c
++++ b/libswscale/input.c
+@@ -947,6 +947,39 @@ static void nv21ToUV_c(uint8_t *dstU, uint8_t *dstV,
+     nvXXtoUV_c(dstV, dstU, src1, width);
+ }
+ 
++static av_always_inline void nv15_20ToYUV_c(uint16_t *dst, const uint8_t *src,
++                                            int dst_pos, int src_pos)
++{
++    int shift = (src_pos << 1) & 7;
++    src_pos = (src_pos * 10) >> 3;
++    AV_WN16(dst + dst_pos,
++            ((AV_RL16(src + src_pos) >> shift) |
++             (AV_RL16(src + src_pos + 1) << (8 - shift))) & 0x3FF);
++}
++
++static void nv15_20ToY_c(uint8_t *_dst, const uint8_t *_src, const uint8_t *unused1,
++                         const uint8_t *unused2, int width, uint32_t *unused, void *opq)
++{
++    int i;
++    const uint8_t *src = (const uint8_t *)_src;
++    uint16_t *dst      = (uint16_t *)_dst;
++    for (i = 0; i < width; i++)
++        nv15_20ToYUV_c(dst, src, i, i);
++}
++
++static void nv15_20ToUV_c(uint8_t *_dstU, uint8_t *_dstV,
++                          const uint8_t *unused0, const uint8_t *_src1, const uint8_t *_src2,
++                          int width, uint32_t *unused, void *opq)
++{
++    int i;
++    const uint8_t *src1 = (const uint8_t *)_src1;
++    uint16_t *dstU      = (uint16_t *)_dstU, *dstV = (uint16_t *)_dstV;
++    for (i = 0; i < width; i++) {
++        nv15_20ToYUV_c(dstU, src1, i, 2 * i);
++        nv15_20ToYUV_c(dstV, src1, i, 2 * i + 1);
++    }
++}
++
+ #define p01x_uv_wrapper(fmt, shift) \
+     static void fmt ## LEToUV ## _c(uint8_t *dstU,                       \
+                                        uint8_t *dstV,                    \
+@@ -2070,6 +2103,10 @@ av_cold void ff_sws_init_input_funcs(SwsInternal *c,
+     case AV_PIX_FMT_XV48BE:
+         *chrToYV12 = read_xv48be_UV_c;
+         break;
++    case AV_PIX_FMT_NV15:
++    case AV_PIX_FMT_NV20:
++        *chrToYV12 = nv15_20ToUV_c;
++        break;
+     case AV_PIX_FMT_NV20LE:
+         *chrToYV12 = nv20LEToUV_c;
+         break;
+@@ -2677,6 +2714,10 @@ av_cold void ff_sws_init_input_funcs(SwsInternal *c,
+     case AV_PIX_FMT_BGRA64LE:
+         *lumToYV12 = bgr64LEToY_c;
+         break;
++    case AV_PIX_FMT_NV15:
++    case AV_PIX_FMT_NV20:
++        *lumToYV12 = nv15_20ToY_c;
++        break;
+     case AV_PIX_FMT_NV20LE:
+         *lumToYV12 = nv20LEToY_c;
+         break;
+diff --git a/libswscale/swscale_unscaled.c b/libswscale/swscale_unscaled.c
+index 9ef40f41c9..88673d4b6c 100644
+--- a/libswscale/swscale_unscaled.c
++++ b/libswscale/swscale_unscaled.c
+@@ -271,6 +271,74 @@ static int nv24ToYuv420Wrapper(SwsInternal *c, const uint8_t *const src[],
+     return srcSliceH;
+ }
+ 
++static int nv15_20ToPlanarWrapper(SwsInternal *c, const uint8_t *const src8[],
++                                  const int srcStride[], int srcSliceY,
++                                  int srcSliceH, uint8_t *const dstParam[],
++                                  const int dstStride[])
++{
++    const AVPixFmtDescriptor *src_format = av_pix_fmt_desc_get(c->opts.src_format);
++    const AVPixFmtDescriptor *dst_format = av_pix_fmt_desc_get(c->opts.dst_format);
++    int vsub = 1 << dst_format->log2_chroma_h;
++    const uint8_t **src = (const uint8_t**)src8;
++    uint16_t *dstY = (uint16_t*)(dstParam[0] + dstStride[0] * srcSliceY);
++    uint16_t *dstU = (uint16_t*)(dstParam[1] + dstStride[1] * srcSliceY / vsub);
++    uint16_t *dstV = (uint16_t*)(dstParam[2] + dstStride[2] * srcSliceY / vsub);
++    int x, y;
++
++    /* Calculate net shift required for values. */
++    const int shift[3] = {
++        dst_format->comp[0].depth + dst_format->comp[0].shift -
++        src_format->comp[0].depth - src_format->comp[0].shift,
++        dst_format->comp[1].depth + dst_format->comp[1].shift -
++        src_format->comp[1].depth - src_format->comp[1].shift,
++        dst_format->comp[2].depth + dst_format->comp[2].shift -
++        src_format->comp[2].depth - src_format->comp[2].shift,
++    };
++
++    for (y = srcSliceH; y > 0; y--) {
++        const uint8_t *tsrcY = src[0];
++        uint16_t *tdstY = dstY;
++        for (x = c->opts.src_w / 4; x > 0; x--) {
++            *tdstY++ = (((tsrcY[1] & 0x3 ) << 8) | (tsrcY[0]        & 0xFF)) << shift[0];
++            *tdstY++ = (((tsrcY[2] & 0xF ) << 6) | ((tsrcY[1] >> 2) & 0x3F)) << shift[0];
++            *tdstY++ = (((tsrcY[3] & 0x3F) << 4) | ((tsrcY[2] >> 4) & 0xF )) << shift[0];
++            *tdstY++ = (((tsrcY[4] & 0xFF) << 2) | ((tsrcY[3] >> 6) & 0x3 )) << shift[0];
++            tsrcY += 5;
++        }
++        const int y_rem = c->opts.src_w & 3;
++        if (y_rem) {
++            *tdstY++ = (((tsrcY[1] & 0x3) << 8) | (tsrcY[0] & 0xFF)) << shift[0];
++            if (y_rem > 1)
++                *tdstY++ = (((tsrcY[2] & 0xF ) << 6) | ((tsrcY[1] >> 2) & 0x3F)) << shift[0];
++            if (y_rem > 2)
++                *tdstY++ = (((tsrcY[3] & 0x3F) << 4) | ((tsrcY[2] >> 4) & 0xF )) << shift[0];
++        }
++        src[0] += srcStride[0];
++        dstY += dstStride[0] / sizeof(uint16_t);
++    }
++
++    for (y = srcSliceH / vsub; y > 0; y--) {
++        const uint8_t *tsrcUV = src[1];
++        uint16_t *tdstU = dstU, *tdstV = dstV;
++        for (x = c->chrSrcW / 2; x > 0; x--) {
++            *tdstU++ = (((tsrcUV[1] & 0x3 ) << 8) | (tsrcUV[0]        & 0xFF)) << shift[1];
++            *tdstV++ = (((tsrcUV[2] & 0xF ) << 6) | ((tsrcUV[1] >> 2) & 0x3F)) << shift[2];
++            *tdstU++ = (((tsrcUV[3] & 0x3F) << 4) | ((tsrcUV[2] >> 4) & 0xF )) << shift[1];
++            *tdstV++ = (((tsrcUV[4] & 0xFF) << 2) | ((tsrcUV[3] >> 6) & 0x3 )) << shift[2];
++            tsrcUV += 5;
++        }
++        if (c->chrSrcW & 1) {
++            *tdstU++ = (((tsrcUV[1] & 0x3) << 8) | (tsrcUV[0]        & 0xFF)) << shift[1];
++            *tdstV++ = (((tsrcUV[2] & 0xF) << 6) | ((tsrcUV[1] >> 2) & 0x3F)) << shift[2];
++        }
++        src[1] += srcStride[1];
++        dstU += dstStride[1] / sizeof(uint16_t);
++        dstV += dstStride[2] / sizeof(uint16_t);
++    }
++
++    return srcSliceH;
++}
++
+ static int planarToP01xWrapper(SwsInternal *c, const uint8_t *const src8[],
+                                const int srcStride[], int srcSliceY,
+                                int srcSliceH, uint8_t *const dstParam8[],
+@@ -2432,6 +2500,19 @@ void ff_get_unscaled_swscale(SwsInternal *c)
+         (srcFormat == AV_PIX_FMT_NV24 || srcFormat == AV_PIX_FMT_NV42)) {
+         c->convert_unscaled = nv24ToPlanarWrapper;
+     }
++    /* nv15_to_yuv420p1x & nv20_to_yuv422p1x */
++    if ((srcFormat == AV_PIX_FMT_NV15 &&
++         (dstFormat == AV_PIX_FMT_YUV420P10 ||
++          dstFormat == AV_PIX_FMT_YUV420P12 ||
++          dstFormat == AV_PIX_FMT_YUV420P14 ||
++          dstFormat == AV_PIX_FMT_YUV420P16)) ||
++        (srcFormat == AV_PIX_FMT_NV20 &&
++         (dstFormat == AV_PIX_FMT_YUV422P10 ||
++          dstFormat == AV_PIX_FMT_YUV422P12 ||
++          dstFormat == AV_PIX_FMT_YUV422P14 ||
++          dstFormat == AV_PIX_FMT_YUV422P16))) {
++        c->convert_unscaled = nv15_20ToPlanarWrapper;
++    }
+     /* yuv2bgr */
+     if ((srcFormat == AV_PIX_FMT_YUV420P || srcFormat == AV_PIX_FMT_YUV422P ||
+          srcFormat == AV_PIX_FMT_YUVA420P) && isAnyRGB(dstFormat) &&
+diff --git a/tests/ref/fate/imgutils b/tests/ref/fate/imgutils
+index 1d104b7476..ea42a206bd 100644
+--- a/tests/ref/fate/imgutils
++++ b/tests/ref/fate/imgutils
+@@ -308,6 +308,8 @@ gbrp12msbbe     planes: 3, linesizes: 128 128 128   0, plane_sizes:  6144  6144
+ gbrp12msble     planes: 3, linesizes: 128 128 128   0, plane_sizes:  6144  6144  6144     0, plane_offsets:  6144  6144     0, total_size: 18432
+ xyzp12le        planes: 3, linesizes: 128 128 128   0, plane_sizes:  6144  6144  6144     0, plane_offsets:  6144  6144     0, total_size: 18432
+ xyzp12be        planes: 3, linesizes: 128 128 128   0, plane_sizes:  6144  6144  6144     0, plane_offsets:  6144  6144     0, total_size: 18432
++nv15            planes: 2, linesizes:  80  80   0   0, plane_sizes:  3840  1920     0     0, plane_offsets:  3840     0     0, total_size: 5760
++nv20            planes: 2, linesizes:  80  80   0   0, plane_sizes:  3840  3840     0     0, plane_offsets:  3840     0     0, total_size: 7680
+ 
+ image_fill_black tests
+ yuv420p         total_size:   4608,  black_unknown_crc: 0xd00f6cc6,  black_tv_crc: 0xd00f6cc6,  black_pc_crc: 0x234969af
+@@ -563,3 +565,5 @@ gbrp12msbbe     total_size:  18432,  black_unknown_crc: 0x00000000,  black_tv_cr
+ gbrp12msble     total_size:  18432,  black_unknown_crc: 0x00000000,  black_tv_crc: 0x00000000,  black_pc_crc: 0x00000000
+ xyzp12le        total_size:  18432,  black_unknown_crc: 0x00000000,  black_tv_crc: 0x00000000,  black_pc_crc: 0x00000000
+ xyzp12be        total_size:  18432,  black_unknown_crc: 0x00000000,  black_tv_crc: 0x00000000,  black_pc_crc: 0x00000000
++nv15            total_size:   5760,  black_unknown_crc: 0x6b5fdb58,  black_tv_crc: 0x6b5fdb58,  black_pc_crc: 0x660a512c
++nv20            total_size:   7680,  black_unknown_crc: 0x171f53da,  black_tv_crc: 0x171f53da,  black_pc_crc: 0xfcf5cda3
+-- 
+2.43.0

@@ -1,0 +1,305 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: gregordinary <33880035+gregordinary@users.noreply.github.com>
+Date: Mon, 31 Aug 2026 14:06:25 -0400
+Subject: [PATCH] avcodec/v4l2_m2m: add an MJPEG encoder
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Hardware JPEG encoders are mainline V4L2 stateful M2M devices and
+ffmpeg could not reach any of them: there was no JPEG wrapper in either
+direction, so every consumer that drives ffmpeg — Jellyfin trickplay,
+Frigate snapshots — encoded JPEG in software next to an idle encoder.
+The RK3588 VEPU121 (hantro-vpu, rockchip,rk3588-vepu121-enc) is the
+device this was written against; it takes NV12, YUV420P or packed 4:2:2
+and emits baseline JFIF.
+
+JPEG shares almost nothing with the inter-coded settings
+v4l2_prepare_encoder() sends, so it gets its own preparation: no GOP,
+no bitrate, no rate control and no B-frame probe, and one control,
+V4L2_CID_JPEG_COMPRESSION_QUALITY, driven from -q:v or from the private
+`quality` option. That control lives in the JPEG control class, so the
+class in the v4l2_ext_controls request is now derived from the control
+id rather than hardcoded to V4L2_CTRL_CLASS_MPEG — passing the MPEG
+class with a JPEG control id is refused with EINVAL by the control
+framework.
+
+Three further things a JPEG instance needs:
+
+- The visible size. A raw OUTPUT format is macroblock aligned, so the
+  coded size an encoder uses is the aligned one and 1080 lines become
+  1088. V4L2 names the visible part of that buffer with the OUTPUT crop
+  rectangle, which hantro reads as the JPEG's own dimensions. Set it
+  for every encoder, not just this one — an inter-coded stream has the
+  same eight rows of alignment padding in it otherwise.
+- Capture buffers the driver sizes. The existing estimate is half a raw
+  frame, which suits an inter-coded stream and underruns JPEG, whose
+  frames can approach the raw picture. Request zero, which V4L2 defines
+  for a coded format as "use your own maximum".
+- A keyframe flag on every packet. Every JPEG is a complete intra
+  picture; drivers are inconsistent about saying so on the buffer, and
+  a stream in which no packet is a keyframe cannot be seeked or
+  segmented.
+
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
+---
+ configure                 |   1 +
+ libavcodec/Makefile       |   1 +
+ libavcodec/allcodecs.c    |   1 +
+ libavcodec/v4l2_context.c |   7 +++
+ libavcodec/v4l2_m2m.h     |   5 ++
+ libavcodec/v4l2_m2m_enc.c | 111 ++++++++++++++++++++++++++++++++++++--
+ 6 files changed, 122 insertions(+), 4 deletions(-)
+
+diff --git a/configure b/configure
+index 8c59d656bc..d68ed2cbf0 100755
+--- a/configure
++++ b/configure
+@@ -3681,6 +3681,7 @@ mp3_mf_encoder_deps="mediafoundation"
+ mp3_mediacodec_decoder_deps="mediacodec"
+ mp3_mediacodec_decoder_select="mpegaudioheader"
+ mpeg1_cuvid_decoder_deps="cuvid"
++mjpeg_v4l2m2m_encoder_deps="v4l2_m2m"
+ mpeg1_v4l2m2m_decoder_deps="v4l2_m2m mpeg1_v4l2_m2m"
+ mpeg2_cuvid_decoder_deps="cuvid"
+ mpeg2_mmal_decoder_deps="mmal"
+diff --git a/libavcodec/Makefile b/libavcodec/Makefile
+index 554ee6481a..777a4e1722 100644
+--- a/libavcodec/Makefile
++++ b/libavcodec/Makefile
+@@ -540,6 +540,7 @@ OBJS-$(CONFIG_MJPEG_DECODER)           += mjpegdec.o mjpegdec_common.o gain_map.
+ OBJS-$(CONFIG_MJPEG_QSV_DECODER)       += qsvdec.o
+ OBJS-$(CONFIG_MJPEG_ENCODER)           += mjpegenc.o mjpegenc_common.o \
+                                           mjpegenc_huffman.o gain_map.o
++OBJS-$(CONFIG_MJPEG_V4L2M2M_ENCODER)   += v4l2_m2m_enc.o
+ OBJS-$(CONFIG_MJPEGB_DECODER)          += mjpegbdec.o
+ OBJS-$(CONFIG_MJPEG_CUVID_DECODER)     += cuviddec.o
+ OBJS-$(CONFIG_MJPEG_QSV_ENCODER)       += qsvenc_jpeg.o
+diff --git a/libavcodec/allcodecs.c b/libavcodec/allcodecs.c
+index b12dcc405a..19785b762d 100644
+--- a/libavcodec/allcodecs.c
++++ b/libavcodec/allcodecs.c
+@@ -902,6 +902,7 @@ extern const FFCodec ff_hevc_vulkan_encoder;
+ extern const FFCodec ff_libkvazaar_encoder;
+ extern const FFCodec ff_mjpeg_cuvid_decoder;
+ extern const FFCodec ff_mjpeg_qsv_encoder;
++extern const FFCodec ff_mjpeg_v4l2m2m_encoder;
+ extern const FFCodec ff_mjpeg_qsv_decoder;
+ extern const FFCodec ff_mjpeg_vaapi_encoder;
+ extern const FFCodec ff_mp3_mediacodec_decoder;
+diff --git a/libavcodec/v4l2_context.c b/libavcodec/v4l2_context.c
+index 7ee0ea8762..4a4848d5a6 100644
+--- a/libavcodec/v4l2_context.c
++++ b/libavcodec/v4l2_context.c
+@@ -118,6 +118,13 @@ static inline int v4l2_get_framesize_compressed(V4L2Context* ctx, int width, int
+     if (s->avctx && av_codec_is_decoder(s->avctx->codec))
+         return ((width * height * 3 / 2) / 2) + 128;
+ 
++    /* JPEG has no inter prediction, so a frame can approach the size of the
++     * raw picture and the half-a-raw-frame estimate below underruns it. Ask
++     * for nothing and let the driver publish its own worst case, which V4L2
++     * defines a zero sizeimage to mean for a coded format. */
++    if (ctx->av_codec_id == AV_CODEC_ID_MJPEG)
++        return 0;
++
+     /* encoder */
+     size = FFALIGN(height, 32) * FFALIGN(width, 32) * 3 / 2 / 2;
+     return FFALIGN(size, SZ_4K);
+diff --git a/libavcodec/v4l2_m2m.h b/libavcodec/v4l2_m2m.h
+index 4ba33dc335..18be1add3b 100644
+--- a/libavcodec/v4l2_m2m.h
++++ b/libavcodec/v4l2_m2m.h
+@@ -75,6 +75,11 @@ typedef struct V4L2m2mPriv {
+ 
+     int num_output_buffers;
+     int num_capture_buffers;
++
++    /** Encoder compression quality as a percentage, -1 for the driver's own
++     *  default. Only the JPEG encoder reads it; nothing else has a control
++     *  taking a plain quality. */
++    int quality;
+ } V4L2m2mPriv;
+ 
+ /**
+diff --git a/libavcodec/v4l2_m2m_enc.c b/libavcodec/v4l2_m2m_enc.c
+index 93703ccc63..b548a950a3 100644
+--- a/libavcodec/v4l2_m2m_enc.c
++++ b/libavcodec/v4l2_m2m_enc.c
+@@ -37,6 +37,7 @@
+ 
+ #define MPEG_CID(x) V4L2_CID_MPEG_VIDEO_##x
+ #define MPEG_VIDEO(x) V4L2_MPEG_VIDEO_##x
++#define JPEG_CID(x) V4L2_CID_JPEG_##x
+ 
+ static inline void v4l2_set_timeperframe(V4L2m2mContext *s, unsigned int num, unsigned int den)
+ {
+@@ -56,7 +57,7 @@ static inline void v4l2_set_ext_ctrl(V4L2m2mContext *s, unsigned int id, signed
+     struct v4l2_ext_control ctrl = { 0 };
+ 
+     /* set ctrls */
+-    ctrls.ctrl_class = V4L2_CTRL_CLASS_MPEG;
++    ctrls.ctrl_class = V4L2_CTRL_ID2WHICH(id);
+     ctrls.controls = &ctrl;
+     ctrls.count = 1;
+ 
+@@ -78,7 +79,7 @@ static inline int v4l2_get_ext_ctrl(V4L2m2mContext *s, unsigned int id, signed i
+     int ret;
+ 
+     /* set ctrls */
+-    ctrls.ctrl_class = V4L2_CTRL_CLASS_MPEG;
++    ctrls.ctrl_class = V4L2_CTRL_ID2WHICH(id);
+     ctrls.controls = &ctrl;
+     ctrls.count = 1;
+ 
+@@ -171,6 +172,62 @@ static inline void v4l2_subscribe_eos_event(V4L2m2mContext *s)
+                "the v4l2 driver does not support end of stream VIDIOC_SUBSCRIBE_EVENT\n");
+ }
+ 
++/**
++ * Give the driver the picture's visible size.
++ *
++ * A raw OUTPUT format is macroblock aligned, so the coded size the encoder
++ * would otherwise use is the aligned one: 1080 lines become 1088, and the
++ * eight extra lines are whatever the alignment left in the buffer. The
++ * OUTPUT crop rectangle is how V4L2 names the visible part of that buffer.
++ * Not every encoder implements it, so a refusal is not fatal.
++ */
++static void v4l2_set_visible_rect(V4L2m2mContext *s)
++{
++    AVCodecContext *avctx = s->avctx;
++    struct v4l2_selection sel = {
++        .type   = V4L2_BUF_TYPE_VIDEO_OUTPUT,
++        .target = V4L2_SEL_TGT_CROP,
++        .r      = { .left = 0, .top = 0,
++                    .width = avctx->width, .height = avctx->height },
++    };
++
++    if (ioctl(s->fd, VIDIOC_S_SELECTION, &sel) < 0) {
++        av_log(avctx, AV_LOG_DEBUG, "the driver does not crop the output to "
++                                    "the visible size: %s\n", strerror(errno));
++        return;
++    }
++
++    if (sel.r.width != avctx->width || sel.r.height != avctx->height)
++        av_log(avctx, AV_LOG_WARNING, "encoder coded size is %ux%u, not %dx%d\n",
++               sel.r.width, sel.r.height, avctx->width, avctx->height);
++}
++
++/**
++ * JPEG shares none of the inter-coded settings v4l2_prepare_encoder() sends.
++ * It has no GOP, no bitrate, no B-frames and no rate control, and its one
++ * knob lives in the JPEG control class rather than the MPEG one.
++ */
++static int v4l2_prepare_jpeg_encoder(V4L2m2mContext *s)
++{
++    AVCodecContext *avctx = s->avctx;
++    int quality = ((V4L2m2mPriv *)avctx->priv_data)->quality;
++
++    v4l2_subscribe_eos_event(s);
++    v4l2_set_visible_rect(s);
++
++    /* -q:v is the JPEG quality directly: the V4L2 control is a percentage
++     * where larger is better, which is the scale JPEG quality is quoted on.
++     * Left alone, the driver keeps its own default. */
++    if (quality < 0 && (avctx->flags & AV_CODEC_FLAG_QSCALE))
++        quality = avctx->global_quality / FF_QP2LAMBDA;
++
++    if (quality >= 0)
++        v4l2_set_ext_ctrl(s, JPEG_CID(COMPRESSION_QUALITY), quality,
++                          "compression quality", 1);
++
++    return 0;
++}
++
+ static int v4l2_prepare_encoder(V4L2m2mContext *s)
+ {
+     AVCodecContext *avctx = s->avctx;
+@@ -181,6 +238,7 @@ static int v4l2_prepare_encoder(V4L2m2mContext *s)
+      * requirements
+      */
+     v4l2_subscribe_eos_event(s);
++    v4l2_set_visible_rect(s);
+ 
+     ret = v4l2_check_b_frame_support(s);
+     if (ret)
+@@ -328,7 +386,14 @@ static int v4l2_receive_packet(AVCodecContext *avctx, AVPacket *avpkt)
+     }
+ 
+ dequeue:
+-    return ff_v4l2_context_dequeue_packet(capture, avpkt);
++    ret = ff_v4l2_context_dequeue_packet(capture, avpkt);
++    /* Every JPEG is a complete intra picture. Drivers are inconsistent about
++     * flagging that on the buffer, and a stream of packets none of which is a
++     * keyframe makes seeking and segmenting impossible. */
++    if (!ret && avctx->codec_id == AV_CODEC_ID_MJPEG)
++        avpkt->flags |= AV_PKT_FLAG_KEY;
++
++    return ret;
+ }
+ 
+ static av_cold int v4l2_encode_init(AVCodecContext *avctx)
+@@ -378,7 +443,8 @@ static av_cold int v4l2_encode_init(AVCodecContext *avctx)
+         return AVERROR(EINVAL);
+     }
+ 
+-    return v4l2_prepare_encoder(s);
++    return avctx->codec_id == AV_CODEC_ID_MJPEG ? v4l2_prepare_jpeg_encoder(s)
++                                                : v4l2_prepare_encoder(s);
+ }
+ 
+ static av_cold int v4l2_encode_close(AVCodecContext *avctx)
+@@ -405,6 +471,13 @@ static const AVOption options[] = {
+     { NULL },
+ };
+ 
++static const AVOption mjpeg_options[] = {
++    V4L_M2M_CAPTURE_OPTS,
++    { "quality", "Compression quality, larger is better; -1 keeps the driver's default",
++        OFFSET(quality), AV_OPT_TYPE_INT, {.i64 = -1 }, -1, 100, FLAGS },
++    { NULL },
++};
++
+ static const FFCodecDefault v4l2_m2m_defaults[] = {
+     { "qmin", "-1" },
+     { "qmax", "-1" },
+@@ -439,8 +512,38 @@ static const FFCodecDefault v4l2_m2m_defaults[] = {
+         .p.wrapper_name = "v4l2m2m", \
+     }
+ 
++/* Naming the formats lets the filter graph convert into one of them instead of
++ * handing the encoder something it refuses at init — the wrapper has no device
++ * open while the graph negotiates, so it cannot ask this particular driver what
++ * it takes. The list is therefore what a JPEG M2M encoder can be relied on to
++ * accept rather than what any one of them accepts: 4:2:0 in both plane layouts
++ * and the two packed 4:2:2 orders. A driver narrower than that still errors at
++ * init, naming the format it wants. JPEG is full range by definition. */
++#define M2MENC_JPEG(NAME, LONGNAME, OPTIONS_NAME, CODEC) \
++    M2MENC_CLASS(NAME, OPTIONS_NAME) \
++    const FFCodec ff_ ## NAME ## _v4l2m2m_encoder = { \
++        .p.name         = #NAME "_v4l2m2m" , \
++        CODEC_LONG_NAME("V4L2 mem2mem " LONGNAME " encoder wrapper"), \
++        .p.type         = AVMEDIA_TYPE_VIDEO, \
++        .p.id           = CODEC , \
++        .priv_data_size = sizeof(V4L2m2mPriv), \
++        .p.priv_class   = &v4l2_m2m_ ## NAME ##_enc_class, \
++        .init           = v4l2_encode_init, \
++        FF_CODEC_RECEIVE_PACKET_CB(v4l2_receive_packet), \
++        .close          = v4l2_encode_close, \
++        .defaults       = v4l2_m2m_defaults, \
++        .p.capabilities = AV_CODEC_CAP_HARDWARE | AV_CODEC_CAP_DELAY, \
++        CODEC_PIXFMTS(AV_PIX_FMT_YUV420P, AV_PIX_FMT_NV12, \
++                      AV_PIX_FMT_YUYV422, AV_PIX_FMT_UYVY422), \
++        .color_ranges   = AVCOL_RANGE_JPEG, \
++        .caps_internal  = FF_CODEC_CAP_NOT_INIT_THREADSAFE | \
++                          FF_CODEC_CAP_INIT_CLEANUP, \
++        .p.wrapper_name = "v4l2m2m", \
++    }
++
+ M2MENC(mpeg4,"MPEG4", mpeg4_options, AV_CODEC_ID_MPEG4);
+ M2MENC(h263, "H.263", options,       AV_CODEC_ID_H263);
+ M2MENC(h264, "H.264", options,       AV_CODEC_ID_H264);
+ M2MENC(hevc, "HEVC",  options,       AV_CODEC_ID_HEVC);
+ M2MENC(vp8,  "VP8",   options,       AV_CODEC_ID_VP8);
++M2MENC_JPEG(mjpeg, "MJPEG", mjpeg_options, AV_CODEC_ID_MJPEG);
+-- 
+2.43.0

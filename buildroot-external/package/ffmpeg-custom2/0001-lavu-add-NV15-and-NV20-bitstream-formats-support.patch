@@ -1,0 +1,138 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nyanmisaka <nst799610810@gmail.com>
+Date: Sun, 8 Mar 2026 14:27:31 +0800
+Subject: [PATCH] lavu: add NV15 and NV20 bitstream formats support
+
+Signed-off-by: nyanmisaka <nst799610810@gmail.com>
+(cherry picked from commit edf4576d8e37092f3b6cbf394c742a6caeac8f96)
+[gregordinary: n9.1's enum gains AV_PIX_FMT_CUARRAY and the XYZP12 pair,
+ and NV15 and NV20 follow them.]
+---
+ libavutil/pixdesc.c              | 24 ++++++++++++++++++++++++
+ libavutil/pixfmt.h               |  8 ++++----
+ tests/ref/fate/sws-pixdesc-query | 10 ++++++++++
+ 3 files changed, 38 insertions(+), 4 deletions(-)
+
+diff --git a/libavutil/pixdesc.c b/libavutil/pixdesc.c
+index c7cbfa8658..03b52afea8 100644
+--- a/libavutil/pixdesc.c
++++ b/libavutil/pixdesc.c
+@@ -3295,6 +3295,30 @@ static const AVPixFmtDescriptor av_pix_fmt_descriptors[AV_PIX_FMT_NB] = {
+         .name = "ohcodec",
+         .flags = AV_PIX_FMT_FLAG_HWACCEL,
+     },
++    [AV_PIX_FMT_NV15] = {
++        .name = "nv15",
++        .nb_components = 3,
++        .log2_chroma_w = 1,
++        .log2_chroma_h = 1,
++        .comp = {
++            { 0, 10,  0, 0, 10 },      /* Y */
++            { 1, 20,  0, 0, 10 },      /* U */
++            { 1, 20, 10, 0, 10 },      /* V */
++        },
++        .flags = AV_PIX_FMT_FLAG_PLANAR | AV_PIX_FMT_FLAG_BITSTREAM,
++    },
++    [AV_PIX_FMT_NV20] = {
++        .name = "nv20",
++        .nb_components = 3,
++        .log2_chroma_w = 1,
++        .log2_chroma_h = 0,
++        .comp = {
++            { 0, 10,  0, 0, 10 },      /* Y */
++            { 1, 20,  0, 0, 10 },      /* U */
++            { 1, 20, 10, 0, 10 },      /* V */
++        },
++        .flags = AV_PIX_FMT_FLAG_PLANAR | AV_PIX_FMT_FLAG_BITSTREAM,
++    },
+ };
+ 
+ static const char * const color_range_names[] = {
+diff --git a/libavutil/pixfmt.h b/libavutil/pixfmt.h
+index 750e05b644..99944470a9 100644
+--- a/libavutil/pixfmt.h
++++ b/libavutil/pixfmt.h
+@@ -196,8 +196,8 @@ enum AVPixelFormat {
+     AV_PIX_FMT_XYZ12LE,      ///< packed XYZ 4:4:4, 36 bpp, (msb) 12X, 12Y, 12Z (lsb), the 2-byte value for each X/Y/Z is stored as little-endian, the 4 lower bits are set to 0
+     AV_PIX_FMT_XYZ12BE,      ///< packed XYZ 4:4:4, 36 bpp, (msb) 12X, 12Y, 12Z (lsb), the 2-byte value for each X/Y/Z is stored as big-endian, the 4 lower bits are set to 0
+     AV_PIX_FMT_NV16,         ///< interleaved chroma YUV 4:2:2, 16bpp, (1 Cr & Cb sample per 2x1 Y samples)
+-    AV_PIX_FMT_NV20LE,       ///< interleaved chroma YUV 4:2:2, 20bpp, (1 Cr & Cb sample per 2x1 Y samples), little-endian
+-    AV_PIX_FMT_NV20BE,       ///< interleaved chroma YUV 4:2:2, 20bpp, (1 Cr & Cb sample per 2x1 Y samples), big-endian
++    AV_PIX_FMT_NV20LE,       ///< interleaved chroma YUV 4:2:2, 20bpp, (1 Cr & Cb sample per 2x1 Y samples), little-endian, deprecated in favor of AV_PIX_FMT_NV20
++    AV_PIX_FMT_NV20BE,       ///< interleaved chroma YUV 4:2:2, 20bpp, (1 Cr & Cb sample per 2x1 Y samples), big-endian, deprecated in favor of AV_PIX_FMT_NV20
+ 
+     AV_PIX_FMT_RGBA64BE,     ///< packed RGBA 16:16:16:16, 64bpp, 16R, 16G, 16B, 16A, the 2-byte value for each R/G/B/A component is stored as big-endian
+     AV_PIX_FMT_RGBA64LE,     ///< packed RGBA 16:16:16:16, 64bpp, 16R, 16G, 16B, 16A, the 2-byte value for each R/G/B/A component is stored as little-endian
+@@ -507,6 +507,8 @@ enum AVPixelFormat {
+ 
+     AV_PIX_FMT_XYZP12LE,       ///< planar XYZ 4:4:4, 36 bpp, (msb) 12X, 12Y, 12Z (lsb), the 2-byte value for each X/Y/Z is stored as little-endian, the 4 lower bits are set to 0
+     AV_PIX_FMT_XYZP12BE,       ///< planar XYZ 4:4:4, 36 bpp, (msb) 12X, 12Y, 12Z (lsb), the 2-byte value for each X/Y/Z is stored as big-endian, the 4 lower bits are set to 0
++    AV_PIX_FMT_NV15,        ///< like P010, but has no zero padding bits, 15bpp, bitstream
++    AV_PIX_FMT_NV20,        ///< like P210, but has no zero padding bits, 20bpp, bitstream
+ 
+     AV_PIX_FMT_NB         ///< number of pixel formats, DO NOT USE THIS if you want to link with shared libav* because the number of formats might differ between versions
+ };
+@@ -607,8 +609,6 @@ enum AVPixelFormat {
+ 
+ #define AV_PIX_FMT_XYZ12      AV_PIX_FMT_NE(XYZ12BE, XYZ12LE)
+ #define AV_PIX_FMT_XYZP12     AV_PIX_FMT_NE(XYZP12BE, XYZP12LE)
+-
+-#define AV_PIX_FMT_NV20       AV_PIX_FMT_NE(NV20BE,  NV20LE)
+ #define AV_PIX_FMT_AYUV64     AV_PIX_FMT_NE(AYUV64BE, AYUV64LE)
+ #define AV_PIX_FMT_P010       AV_PIX_FMT_NE(P010BE,  P010LE)
+ #define AV_PIX_FMT_P012       AV_PIX_FMT_NE(P012BE,  P012LE)
+diff --git a/tests/ref/fate/sws-pixdesc-query b/tests/ref/fate/sws-pixdesc-query
+index 92a2430ca4..b91447bda8 100644
+--- a/tests/ref/fate/sws-pixdesc-query
++++ b/tests/ref/fate/sws-pixdesc-query
+@@ -79,6 +79,8 @@ isNBPS:
+   gray14le
+   gray9be
+   gray9le
++  nv15
++  nv20
+   nv20be
+   nv20le
+   p010be
+@@ -266,7 +268,9 @@ isYUV:
+   ayuv64be
+   ayuv64le
+   nv12
++  nv15
+   nv16
++  nv20
+   nv20be
+   nv20le
+   nv21
+@@ -400,7 +404,9 @@ isYUV:
+ 
+ isPlanarYUV:
+   nv12
++  nv15
+   nv16
++  nv20
+   nv20be
+   nv20le
+   nv21
+@@ -503,7 +509,9 @@ isPlanarYUV:
+ 
+ isSemiPlanarYUV:
+   nv12
++  nv15
+   nv16
++  nv20
+   nv20be
+   nv20le
+   nv21
+@@ -1018,7 +1026,9 @@ Planar:
+   gbrpf32be
+   gbrpf32le
+   nv12
++  nv15
+   nv16
++  nv20
+   nv20be
+   nv20le
+   nv21
+-- 
+2.43.0
