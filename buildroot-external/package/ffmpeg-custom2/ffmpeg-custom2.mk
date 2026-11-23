@@ -7,6 +7,14 @@ FFMPEG_CUSTOM2_LICENSE = LGPL-2.1+
 FFMPEG_CUSTOM2_LICENSE_FILES = COPYING.LGPLv2.1
 FFMPEG_CUSTOM2_CPE_ID_VENDOR = ffmpeg
 
+# Buildroot only applies the *.patch files at the top of the package
+# directory. The V4L2 request-API series in v4l2-request/ must go in
+# first: the RKMPP/RKRGA/v4l2 patches here are based on top of it.
+define FFMPEG_CUSTOM2_APPLY_V4L2_REQUEST_PATCHES
+	$(APPLY_PATCHES) $(@D) $(FFMPEG_CUSTOM2_PKGDIR)/v4l2-request \*.patch
+endef
+FFMPEG_CUSTOM2_PRE_PATCH_HOOKS += FFMPEG_CUSTOM2_APPLY_V4L2_REQUEST_PATCHES
+
 FFMPEG_CUSTOM2_CONF_OPTS = \
 	--prefix=/usr \
 	--enable-avfilter \
