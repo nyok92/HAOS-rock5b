@@ -21,6 +21,7 @@ rawvideo input
 Found during triage/review of the security report AISLE-2026-R0043
 [gregordinary: backported from FFmpeg master c0c7f3366ab5, which no release
  carries yet. Dropped when the base does.]
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
 ---
  libavcodec/v4l2_buffers.c | 45 ++++++++++++++++++++++++++++++++-------
  1 file changed, 37 insertions(+), 8 deletions(-)
