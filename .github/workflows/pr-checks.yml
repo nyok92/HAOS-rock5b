@@ -2,7 +2,11 @@
 
 name: PR checks
 
-on: [pull_request]
+on:
+  pull_request:
+    branches-ignore:
+      - 'rock5b-main'
+      - 'rock5b-dev'
 
 jobs:
   linters:
