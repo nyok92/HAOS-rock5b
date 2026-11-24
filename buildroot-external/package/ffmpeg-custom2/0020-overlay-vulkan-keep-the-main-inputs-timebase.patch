@@ -22,6 +22,7 @@ State the output timebase explicitly as the main input's and pin
 framesync to it, as overlay, overlay_vaapi and overlay_cuda do. With
 fs->time_base already set, ff_framesync_configure() skips the gcd and
 the injected timestamps are in the units the output link declares.
+Signed-off-by: gregordinary <33880035+gregordinary@users.noreply.github.com>
 ---
  libavfilter/vf_overlay_vulkan.c | 4 ++++
  1 file changed, 4 insertions(+)
