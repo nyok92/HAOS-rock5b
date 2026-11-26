@@ -294,8 +294,8 @@ index 3319f6a2b0c9..8b3a2e095ef8 100644
  				   const struct pd_message *msg)
  {
  	int ret = 0;
-@@ -969,11 +982,9 @@ static int fusb302_pd_send_message(struct fusb302_chip *chip,
- 	u8 pos = 0;
+@@ -970,11 +983,9 @@ static int fusb302_pd_send_message(struct fusb302_chip *chip,
+ 	u8 i;
  	int len;
  
 -	/* SOP tokens */
@@ -487,4 +487,3 @@ index 8b3a2e095ef8..10f2dabf3318 100644
 
 -- 
 2.56.0
-
